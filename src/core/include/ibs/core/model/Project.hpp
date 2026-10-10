@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <map>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -53,8 +55,16 @@ public:
     NoteId addNote(CutPointId cutPointId, int lane, Pulse lengthPulses);
     void removeCutPoint(CutPointId cutPointId);
     void moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses);
+    void retimeCutPoint(CutPointId cutPointId, Pulse newOffsetPulses);
     void movePlacement(PlacementId placementId, Pulse newStartPulse);
     void removePlacement(PlacementId placementId);
+    void removeNote(NoteId noteId);
+    void setNoteLength(NoteId noteId, Pulse lengthPulses);
+    void remapNoteLanes(const std::map<NoteId, int>& lanes);
+
+    void markTempoAffected(PlacementId placementId);
+    void clearTempoAffected(PlacementId placementId);
+    [[nodiscard]] const std::set<PlacementId>& tempoAffectedPlacements() const noexcept { return tempoAffected_; }
 
     [[nodiscard]] bool hasNotes(CutPointId cutPointId) const;
 
@@ -66,6 +76,10 @@ public:
     [[nodiscard]] const Asset& asset(AssetId id) const;
     [[nodiscard]] const Placement& placement(PlacementId id) const;
     [[nodiscard]] const CutPoint& cutPoint(CutPointId id) const;
+    [[nodiscard]] const Note& note(NoteId id) const;
+    [[nodiscard]] bool containsCutPoint(CutPointId id) const;
+    [[nodiscard]] bool containsNote(NoteId id) const;
+    [[nodiscard]] std::vector<NoteId> notesOf(CutPointId cutPointId) const;
     [[nodiscard]] const Asset* findAssetByName(const std::string& name) const;
 
     [[nodiscard]] CutPointId headCutPointOf(PlacementId placementId) const;
@@ -78,6 +92,7 @@ private:
     std::vector<Placement> placements_;
     std::vector<CutPoint> cutPoints_;
     std::vector<Note> notes_;
+    std::set<PlacementId> tempoAffected_;
 };
 
 }  // namespace ibs::core

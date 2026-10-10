@@ -87,7 +87,7 @@ void Project::removeCutPoint(CutPointId cutPointId) {
     std::erase_if(cutPoints_, [cutPointId](const CutPoint& existing) { return existing.id == cutPointId; });
 }
 
-void Project::moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
+void Project::retimeCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
     const CutPoint& target = cutPoint(cutPointId);
     if (target.offsetPulses == 0) {
         throw std::invalid_argument("the placement head cut point cannot be moved; move the placement instead");
@@ -102,11 +102,17 @@ void Project::moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
     if (occupied) {
         throw std::invalid_argument("cut point already exists at offset " + std::to_string(newOffsetPulses));
     }
-    auto& mutableTarget = *std::find_if(cutPoints_.begin(), cutPoints_.end(),
-                                        [cutPointId](const CutPoint& existing) { return existing.id == cutPointId; });
-    mutableTarget.offsetPulses = newOffsetPulses;
+    std::find_if(cutPoints_.begin(), cutPoints_.end(), [cutPointId](const CutPoint& existing) {
+        return existing.id == cutPointId;
+    })->offsetPulses = newOffsetPulses;
+}
+
+void Project::moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
+    retimeCutPoint(cutPointId, newOffsetPulses);
     // Why not 自動検出の印のまま残す: 手で動かした切断点を再検出で消されないよう、手動の切断点として扱う
-    mutableTarget.origin = CutOrigin::Manual;
+    std::find_if(cutPoints_.begin(), cutPoints_.end(), [cutPointId](const CutPoint& existing) {
+        return existing.id == cutPointId;
+    })->origin = CutOrigin::Manual;
 }
 
 void Project::movePlacement(PlacementId placementId, Pulse newStartPulse) {
@@ -127,7 +133,50 @@ void Project::removePlacement(PlacementId placementId) {
     });
     std::erase_if(cutPoints_, [placementId](const CutPoint& existing) { return existing.placementId == placementId; });
     std::erase_if(placements_, [placementId](const Placement& existing) { return existing.id == placementId; });
+    tempoAffected_.erase(placementId);
 }
+
+void Project::removeNote(NoteId noteId) {
+    static_cast<void>(note(noteId));
+    std::erase_if(notes_, [noteId](const Note& existing) { return existing.id == noteId; });
+}
+
+void Project::setNoteLength(NoteId noteId, Pulse lengthPulses) {
+    static_cast<void>(note(noteId));
+    if (lengthPulses < 0) {
+        throw std::invalid_argument("note length must not be negative");
+    }
+    std::find_if(notes_.begin(), notes_.end(), [noteId](const Note& existing) { return existing.id == noteId; })
+        ->lengthPulses = lengthPulses;
+}
+
+// Why not 1 つずつ setNoteLane で変える: ミラーやレーンの入れ替えでは、途中の状態で同じ切断点の同じレーンに
+// 2 つのノーツが一時的に重なり、正しい変更でも重複として拒否されるため、変更後の状態だけを検査する
+void Project::remapNoteLanes(const std::map<NoteId, int>& lanes) {
+    std::vector<Note> remapped = notes_;
+    for (const auto& [id, lane] : lanes) {
+        static_cast<void>(note(id));
+        if (lane <= kBgmLane) {
+            throw std::invalid_argument("note lane must be positive; remove the note to play the slice as BGM");
+        }
+        std::find_if(remapped.begin(), remapped.end(), [id = id](const Note& existing) { return existing.id == id; })
+            ->lane = lane;
+    }
+    std::set<std::pair<CutPointId, int>> occupied;
+    for (const auto& note : remapped) {
+        if (!occupied.emplace(note.cutPointId, note.lane).second) {
+            throw std::invalid_argument("two notes would share lane " + std::to_string(note.lane) + " on one cut point");
+        }
+    }
+    notes_ = std::move(remapped);
+}
+
+void Project::markTempoAffected(PlacementId placementId) {
+    static_cast<void>(placement(placementId));
+    tempoAffected_.insert(placementId);
+}
+
+void Project::clearTempoAffected(PlacementId placementId) { tempoAffected_.erase(placementId); }
 
 std::vector<CutPointId> Project::cutPointsOf(PlacementId placementId) const {
     std::vector<std::pair<Pulse, CutPointId>> ordered;
@@ -153,6 +202,26 @@ const Asset& Project::asset(AssetId id) const { return findById(assets_, id, "as
 const Placement& Project::placement(PlacementId id) const { return findById(placements_, id, "placement"); }
 
 const CutPoint& Project::cutPoint(CutPointId id) const { return findById(cutPoints_, id, "cut point"); }
+
+const Note& Project::note(NoteId id) const { return findById(notes_, id, "note"); }
+
+bool Project::containsCutPoint(CutPointId id) const {
+    return std::any_of(cutPoints_.begin(), cutPoints_.end(), [id](const CutPoint& cut) { return cut.id == id; });
+}
+
+bool Project::containsNote(NoteId id) const {
+    return std::any_of(notes_.begin(), notes_.end(), [id](const Note& existing) { return existing.id == id; });
+}
+
+std::vector<NoteId> Project::notesOf(CutPointId cutPointId) const {
+    std::vector<NoteId> ids;
+    for (const auto& existing : notes_) {
+        if (existing.cutPointId == cutPointId) {
+            ids.push_back(existing.id);
+        }
+    }
+    return ids;
+}
 
 const Asset* Project::findAssetByName(const std::string& name) const {
     const auto found =

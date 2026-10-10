@@ -65,6 +65,7 @@ void StudioController::resetForNewDocument() {
     stopPlayback();
     selectedPlacement_.reset();
     selectedCuts_.clear();
+    selectedNotes_.clear();
     preview_.reset();
     mix_ = {};
     cursorPulse_ = 0;
@@ -165,6 +166,7 @@ void StudioController::onDocumentChanged() {
         emit previewChanged();
     }
     std::erase_if(selectedCuts_, [&project](core::CutPointId id) { return !containsCut(project, id); });
+    std::erase_if(selectedNotes_, [&project](core::NoteId id) { return !project.containsNote(id); });
     emit documentChanged();
     emit selectionChanged();
     if (preview_) {
@@ -189,6 +191,57 @@ void StudioController::selectPlacement(std::optional<core::PlacementId> placemen
 void StudioController::setSelectedCuts(std::vector<core::CutPointId> cuts) {
     selectedCuts_ = std::move(cuts);
     emit selectionChanged();
+}
+
+void StudioController::focusCuts(std::vector<core::CutPointId> cuts) {
+    if (!cuts.empty()) {
+        const auto placement = document_.project().cutPoint(cuts.front()).placementId;
+        if (placement != selectedPlacement_) {
+            selectedPlacement_ = placement;
+            preview_.reset();
+            emit previewChanged();
+            if (autoPreview_) {
+                requestPreview();
+            }
+        }
+    }
+    selectedCuts_ = std::move(cuts);
+    emit selectionChanged();
+}
+
+void StudioController::setSelectedNotes(std::vector<core::NoteId> notes) {
+    selectedNotes_ = std::move(notes);
+    emit selectionChanged();
+}
+
+const core::KeyMode* StudioController::keyMode() const { return charts_.keyModeFor(document_.project()); }
+
+void StudioController::copySelectedNotes() {
+    clipboard_ = core::copyPattern(document_.project(), selectedNotes_);
+    emit statusMessage(QStringLiteral("%1 個のノーツの割当をコピーしました").arg(clipboard_.entries.size()));
+}
+
+core::PasteResult StudioController::pasteAtCursor() {
+    const auto result = app::pastePattern(document_, clipboard_, cursorPulse_);
+    setSelectedNotes(result.addedNotes);
+    QString message = QStringLiteral("貼り付け: 追加 %1").arg(result.added);
+    if (result.missingCutPoints > 0) {
+        message += QStringLiteral(" / 同じ位置に切断点がない %1").arg(result.missingCutPoints);
+    }
+    if (result.alreadyPresent > 0) {
+        message += QStringLiteral(" / すでにある %1").arg(result.alreadyPresent);
+    }
+    emit statusMessage(message);
+    return result;
+}
+
+app::TimingEditOutcome StudioController::editTiming(const QString& label,
+                                                    const std::function<void(core::TimingData&)>& edit) {
+    auto outcome = app::editTiming(document_, toUtf8(label), edit);
+    if (!outcome.desynced.empty()) {
+        emit tempoDesynced(outcome);
+    }
+    return outcome;
 }
 
 void StudioController::setSnapDivisions(int divisions) { snapDivisions_ = std::max(0, divisions); }

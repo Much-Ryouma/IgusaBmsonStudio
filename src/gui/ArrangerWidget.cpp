@@ -3,7 +3,11 @@
 #include <algorithm>
 #include <cmath>
 
+#include <QContextMenuEvent>
+#include <QLineEdit>
+#include <QInputDialog>
 #include <QKeyEvent>
+#include <QMenu>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
@@ -13,6 +17,8 @@
 #include "StudioPalette.hpp"
 #include "TimelineMath.hpp"
 #include "ibs/app/ArrangementCommands.hpp"
+#include "ibs/app/ChartCommands.hpp"
+#include "ibs/core/timing/TimingEdits.hpp"
 #include "ibs/core/playback/PlaybackRange.hpp"
 #include "ibs/core/timing/BarLines.hpp"
 
@@ -238,6 +244,11 @@ void ArrangerWidget::paintPlacement(QPainter& painter, const core::Placement& pl
         const double x = timelineX(static_cast<double>(start + project.cutPoint(id).offsetPulses));
         painter.drawLine(QPointF(x, box.top()), QPointF(x, box.top() + 6));
     }
+    const bool desynced = project.tempoAffectedPlacements().contains(placement.id);
+    if (desynced) {
+        painter.setPen(palette::kClippedCut);
+        painter.drawText(box.adjusted(4, 1, -2, -2), Qt::AlignBottom | Qt::AlignLeft, QStringLiteral("テンポ変更でずれあり (V12)"));
+    }
     const bool selected = controller_.selectedPlacement() == placement.id;
     painter.setPen(QPen(selected ? palette::kSelection : fill.darker(160), selected ? 2.0 : 1.0));
     painter.drawRect(box);
@@ -374,6 +385,61 @@ void ArrangerWidget::keyPressEvent(QKeyEvent* event) {
         return;
     }
     QWidget::keyPressEvent(event);
+}
+
+void ArrangerWidget::contextMenuEvent(QContextMenuEvent* event) {
+    const auto placement = placementAt(event->pos());
+    if (!placement) {
+        return;
+    }
+    controller_.selectPlacement(placement);
+    QMenu menu(this);
+    menu.addAction(QStringLiteral("位置を数値で指定…"), this, [this, placement] {
+        const auto& timing = controller_.project().timing;
+        const auto start = controller_.project().placement(*placement).startPulse;
+        bool ok = false;
+        const QString text = QInputDialog::getText(
+            this, QStringLiteral("配置の位置"),
+            QStringLiteral("小節:拍（例 12:1。小節は 0 から、拍は 1 から）または pulse（例 11520）"), QLineEdit::Normal,
+            QStringLiteral("%1:%2").arg(core::barIndexAt(timing, start))
+                .arg((start - core::barStartPulse(timing, core::barIndexAt(timing, start))) / std::max(1, timing.resolution) + 1),
+            &ok);
+        if (!ok) {
+            return;
+        }
+        core::Pulse target = -1;
+        const auto parts = text.split(QLatin1Char(':'));
+        if (parts.size() == 2) {
+            target = core::barStartPulse(timing, parts[0].toInt()) +
+                     static_cast<core::Pulse>(std::max(0, parts[1].toInt() - 1)) * timing.resolution;
+        } else if (parts.size() == 1) {
+            target = parts[0].toLongLong(&ok);
+        }
+        try {
+            if (target < 0 || !ok) {
+                throw std::invalid_argument("位置は 12:1 のように小節:拍で、または pulse の数値で入力してください");
+            }
+            app::movePlacement(controller_.document(), *placement, target);
+        } catch (const std::exception& error) {
+            reportError(error);
+        }
+    });
+    menu.addAction(QStringLiteral("音切りの画面で開く"), this, [this, placement] { emit placementActivated(*placement); });
+    menu.addAction(QStringLiteral("配置全体を試聴"), this, [this, placement] { controller_.playPlacement(*placement); });
+    menu.addAction(QStringLiteral("削除"), this, [this, placement] {
+        try {
+            app::removePlacement(controller_.document(), *placement);
+        } catch (const std::exception& error) {
+            reportError(error);
+        }
+    });
+    if (controller_.project().tempoAffectedPlacements().contains(*placement)) {
+        menu.addSeparator();
+        menu.addAction(QStringLiteral("テンポ変更のずれ: 切断点はこのままにする（警告を消す）"), this, [this, placement] {
+            app::acceptTempoDrift(controller_.document(), {*placement});
+        });
+    }
+    menu.exec(event->globalPos());
 }
 
 }  // namespace ibs::gui

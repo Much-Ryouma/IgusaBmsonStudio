@@ -119,7 +119,7 @@ TEST_F(ValidatorTest, VAL011_CountsLayeredNotesOnceAndSkipsBgmColumns) {
 
     const auto issue = findIssue(validate(), "V11");
     ASSERT_TRUE(issue.has_value());
-    EXPECT_EQ(issue->message, "総ノーツ数: 2");
+    EXPECT_EQ(issue->message, "総ノーツ数: 2（total の目安: 2）");
 }
 
 TEST_F(ValidatorTest, VAL012_WarnsWhenModeDefinitionIsMissing) {
@@ -128,6 +128,16 @@ TEST_F(ValidatorTest, VAL012_WarnsWhenModeDefinitionIsMissing) {
     const auto issue = findIssue(issues, "V00");
     ASSERT_TRUE(issue.has_value());
     EXPECT_EQ(issue->severity, Severity::Warning);
+}
+
+TEST_F(ValidatorTest, VAL013_WarnsAboutPlacementsDesyncedByTempoChange) {
+    const CutPointId head = cutPointAt("a.wav", 960);
+    project.markTempoAffected(project.cutPoint(head).placementId);
+
+    const auto issue = findIssue(validate(), "V12");
+    ASSERT_TRUE(issue.has_value());
+    EXPECT_EQ(issue->severity, Severity::Warning);
+    EXPECT_NE(issue->message.find("y=960"), std::string::npos);
 }
 
 }  // namespace

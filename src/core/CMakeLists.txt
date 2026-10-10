@@ -7,6 +7,7 @@ add_library(ibs_core STATIC
     src/asset/AssetPath.cpp
     src/audio/AudioBuffer.cpp
     src/audio/WaveformPyramid.cpp
+    src/chart/ChartEditing.cpp
     src/bmson/BmsonEquivalence.cpp
     src/bmson/BmsonExporter.cpp
     src/bmson/BmsonImporter.cpp
@@ -18,6 +19,7 @@ add_library(ibs_core STATIC
     src/slicing/Fft.cpp
     src/slicing/OnsetDetector.cpp
     src/timing/BarLines.cpp
+    src/timing/TimingEdits.cpp
     src/timing/TimingMap.cpp
     src/validation/Validator.cpp)
 add_library(ibs::core ALIAS ibs_core)

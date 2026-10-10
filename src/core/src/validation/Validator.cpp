@@ -2,12 +2,14 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cmath>
 #include <map>
 #include <set>
 #include <string>
 #include <utility>
 
 #include "ibs/core/asset/AssetPath.hpp"
+#include "ibs/core/chart/ChartEditing.hpp"
 
 namespace ibs::core {
 
@@ -138,9 +140,17 @@ std::vector<Issue> validateProject(const Project& project, const ValidationConte
     checkTiming(project, issues);
     checkFiles(project, context.fileSystem, issues);
     checkNotes(project, context.keyMode, issues);
+    for (const auto placementId : project.tempoAffectedPlacements()) {
+        const auto& placement = project.placement(placementId);
+        issues.push_back({Severity::Warning, "V12",
+                          "'" + project.asset(placement.assetId).name + "' (配置 y=" + std::to_string(placement.startPulse) +
+                              ") は切断点を作った後に BPM・STOP が変わったため、切断点と音の立ち上がりがずれています"});
+    }
     if (context.keyMode != nullptr) {
+        const auto notes = countPlayableNotes(project, *context.keyMode);
         issues.push_back({Severity::Info, "V11",
-                          "総ノーツ数: " + std::to_string(countPlayableNotes(project, *context.keyMode))});
+                          "総ノーツ数: " + std::to_string(notes) + "（total の目安: " +
+                              std::to_string(static_cast<long long>(std::lround(recommendedTotal(notes)))) + "）"});
     }
     return issues;
 }

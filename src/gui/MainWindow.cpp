@@ -1,12 +1,20 @@
 #include "MainWindow.hpp"
 
+#include <cmath>
+#include <cstdint>
+
 #include <QAction>
+#include <QLineEdit>
 #include <QCloseEvent>
 #include <QComboBox>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
+#include <QInputDialog>
+#include <QPushButton>
+#include <QTabWidget>
 #include <QKeySequence>
+#include <QSignalBlocker>
 #include <QLabel>
 #include <QMenuBar>
 #include <QMessageBox>
@@ -15,11 +23,14 @@
 #include <QToolBar>
 
 #include "ArrangerWidget.hpp"
+#include "ChartEditorWidget.hpp"
 #include "QtText.hpp"
 #include "SlicerPanel.hpp"
 #include "SongSettingsDialog.hpp"
 #include "WaveformSlicerWidget.hpp"
 #include "ibs/core/BuildInfo.hpp"
+#include "ibs/core/chart/ChartEditing.hpp"
+#include "ibs/core/validation/Validator.hpp"
 
 namespace ibs::gui {
 
@@ -45,7 +56,11 @@ MainWindow::MainWindow(StudioController& controller, QWidget* parent) : QMainWin
     resize(1400, 900);
 
     auto* splitter = new QSplitter(Qt::Vertical, this);
-    arranger_ = new ArrangerWidget(controller_, splitter);
+    tabs_ = new QTabWidget(splitter);
+    arranger_ = new ArrangerWidget(controller_, tabs_);
+    chartEditor_ = new ChartEditorWidget(controller_, tabs_);
+    tabs_->addTab(arranger_, QStringLiteral("アレンジャー"));
+    tabs_->addTab(chartEditor_, QStringLiteral("譜面"));
     auto* bottom = new QWidget(splitter);
     auto* bottomLayout = new QHBoxLayout(bottom);
     bottomLayout->setContentsMargins(0, 0, 0, 0);
@@ -54,14 +69,21 @@ MainWindow::MainWindow(StudioController& controller, QWidget* parent) : QMainWin
     slicerPanel_->setFixedWidth(300);
     bottomLayout->addWidget(slicer_, 1);
     bottomLayout->addWidget(slicerPanel_);
-    splitter->addWidget(arranger_);
+    splitter->addWidget(tabs_);
     splitter->addWidget(bottom);
-    splitter->setStretchFactor(0, 1);
-    splitter->setStretchFactor(1, 1);
+    splitter->setStretchFactor(0, 3);
+    splitter->setStretchFactor(1, 2);
+    splitter->setSizes({540, 360});
     setCentralWidget(splitter);
 
     buildMenus();
+    buildChartMenu();
     buildToolBar();
+    chartStats_ = new QLabel(this);
+    statusBar()->addPermanentWidget(chartStats_);
+    connect(&controller_, &StudioController::tempoDesynced, this, &MainWindow::handleTempoDesync);
+    connect(&controller_, &StudioController::documentChanged, this, &MainWindow::refreshChartStats);
+    refreshChartStats();
 
     connect(arranger_, &ArrangerWidget::placementActivated, this, [this](core::PlacementId placement) {
         controller_.selectPlacement(placement);
@@ -114,7 +136,13 @@ void MainWindow::buildMenus() {
                                                 "  ダブルクリック: 切断点を追加、切断点をドラッグ: 移動\n"
                                                 "  Shift+ドラッグ: 範囲選択、Ctrl+クリック: 選択に追加\n"
                                                 "  Delete: 削除、Q: グリッドに寄せる、P: 配置全体を試聴、F: 全体を表示\n\n"
-                                                "線の色: 青=自動、橙=手動、灰=読み込み、赤=アタック欠け、点線=検出結果の候補"));
+                                                "線の色: 青=自動、橙=手動、灰=読み込み、赤=アタック欠け、点線=検出結果の候補\n\n"
+                                                "譜面（割当モード）\n"
+                                                "  右の素材列の切断点をクリック: 選択して試聴、↑/↓: 次/前の切断点\n"
+                                                "  1〜7: 鍵盤に割当、S: スクラッチ、0: 割当を外す（BGM に戻す）\n"
+                                                "  ノーツを横にドラッグ: レーン変更、上端か Shift+ドラッグ: ロングノーツ\n"
+                                                "  空いた所をドラッグ: 範囲選択、クリック: カーソル、Ctrl+C / Ctrl+V: 割当パターン\n"
+                                                "  右クリック: BPM・STOP・拍子・小節線、Tab: 切断点モード（ダブルクリックで追加、ドラッグで移動）"));
     });
 }
 
@@ -268,6 +296,109 @@ void MainWindow::editSongInfo() {
     if (dialog.exec() == QDialog::Accepted) {
         const auto result = dialog.result();
         controller_.updateSongInfo(result.info, result.initialBpm);
+    }
+}
+
+void MainWindow::buildChartMenu() {
+    auto* chart = menuBar()->addMenu(QStringLiteral("譜面(&C)"));
+    auto* cutMode = chart->addAction(QStringLiteral("切断点モード（Tab）"));
+    cutMode->setCheckable(true);
+    connect(cutMode, &QAction::toggled, this, [this](bool enabled) {
+        chartEditor_->setMode(enabled ? ChartEditMode::CutPoints : ChartEditMode::Assign);
+    });
+    connect(chartEditor_, &ChartEditorWidget::modeChanged, this, [cutMode](ChartEditMode current) {
+        const QSignalBlocker blocker(cutMode);
+        cutMode->setChecked(current == ChartEditMode::CutPoints);
+    });
+    auto* advance = chart->addAction(QStringLiteral("割り当てたら次の切断点へ進む"));
+    advance->setCheckable(true);
+    advance->setChecked(chartEditor_->autoAdvance());
+    connect(advance, &QAction::toggled, this, [this](bool enabled) { chartEditor_->setAutoAdvance(enabled); });
+    auto* collapse = chart->addAction(QStringLiteral("BGM 列を折りたたむ"));
+    collapse->setCheckable(true);
+    connect(collapse, &QAction::toggled, this, [this](bool collapsed) { chartEditor_->setBgmColumnsCollapsed(collapsed); });
+    chart->addSeparator();
+    chart->addAction(QStringLiteral("割当パターンをコピー"), this, [this] { controller_.copySelectedNotes(); });
+    chart->addAction(QStringLiteral("カーソル位置に貼り付け"), this, [this] {
+        try {
+            controller_.pasteAtCursor();
+        } catch (const std::exception& error) {
+            showStatus(toQString(error.what()));
+        }
+    });
+    chart->addSeparator();
+    chart->addAction(QStringLiteral("ミラー"), this, [this] {
+        if (const auto* mode = controller_.keyMode()) {
+            transformSelected(QStringLiteral("ミラー"), core::mirroredLanes(controller_.project(), controller_.selectedNotes(), *mode));
+        }
+    });
+    chart->addAction(QStringLiteral("レーンを入れ替える…"), this, [this] {
+        bool ok = false;
+        const QString text = QInputDialog::getText(this, QStringLiteral("レーンの入れ替え"),
+                                                   QStringLiteral("入れ替える 2 つのレーンの x（例: 1 7）"), QLineEdit::Normal,
+                                                   QStringLiteral("1 7"), &ok);
+        const auto parts = text.split(QLatin1Char(' '), Qt::SkipEmptyParts);
+        if (ok && parts.size() == 2) {
+            transformSelected(QStringLiteral("レーンの入れ替え"),
+                              core::swappedLanes(controller_.project(), controller_.selectedNotes(), parts[0].toInt(), parts[1].toInt()));
+        }
+    });
+    chart->addAction(QStringLiteral("ランダム…"), this, [this] {
+        const auto* mode = controller_.keyMode();
+        bool ok = false;
+        const int seed = QInputDialog::getInt(this, QStringLiteral("ランダム"), QStringLiteral("シード（同じ値なら同じ並びになります）"),
+                                              1, 0, 2147483647, 1, &ok);
+        if (ok && mode != nullptr) {
+            transformSelected(QStringLiteral("ランダム"), core::randomizedLanes(controller_.project(), controller_.selectedNotes(), *mode,
+                                                                            static_cast<std::uint32_t>(seed)));
+        }
+    });
+}
+
+void MainWindow::transformSelected(const QString& label, const std::map<core::NoteId, int>& lanes) {
+    try {
+        const auto changed = app::remapLanes(controller_.document(), toUtf8(label), lanes);
+        showStatus(QStringLiteral("%1: %2 個のノーツを動かしました").arg(label).arg(changed));
+    } catch (const std::exception&) {
+        showStatus(QStringLiteral("%1 できません: 同じスライスの同じレーンに重なるノーツがあります").arg(label));
+    }
+}
+
+void MainWindow::refreshChartStats() {
+    const auto* mode = controller_.keyMode();
+    if (mode == nullptr) {
+        chartStats_->setText(QStringLiteral("モード定義なし"));
+        return;
+    }
+    const auto notes = core::countPlayableNotes(controller_.project(), *mode);
+    chartStats_->setText(QStringLiteral("ノーツ %1 / total %2（目安 %3）")
+                             .arg(notes)
+                             .arg(controller_.project().info.total, 0, 'g', 6)
+                             .arg(std::lround(core::recommendedTotal(notes))));
+}
+
+// Why not 自動で切断点を動かす: テンポを変えた理由が「音源もそのテンポで書き出し直す」場合は pulse のままが正しく、
+// どちらが正しいかは作者にしか分からないため、毎回選んでもらう
+void MainWindow::handleTempoDesync(const app::TimingEditOutcome& outcome) {
+    QMessageBox box(this);
+    box.setWindowTitle(QStringLiteral("テンポの変更で切断点がずれます"));
+    box.setText(QStringLiteral("%1 個の配置で、切断点と音の立ち上がりがずれます。").arg(outcome.desynced.size()));
+    box.setInformativeText(QStringLiteral("「時間を保つ」: 切断点を動かして、音のずれをなくします（音源は今のまま使う場合）。\n"
+                                          "「そのまま」: 切断点の拍の位置を保ちます（音源を新しいテンポで書き出し直す場合）。\n"
+                                          "閉じた場合は警告 (V12) が残り、後で選べます。"));
+    auto* keep = box.addButton(QStringLiteral("時間を保つ"), QMessageBox::AcceptRole);
+    auto* accept = box.addButton(QStringLiteral("そのまま"), QMessageBox::DestructiveRole);
+    box.addButton(QStringLiteral("後で決める"), QMessageBox::RejectRole);
+    box.exec();
+    try {
+        if (box.clickedButton() == keep) {
+            const auto moved = app::keepCutTimes(controller_.document(), outcome.desynced, outcome.before);
+            showStatus(QStringLiteral("%1 個の切断点を動かしました").arg(moved));
+        } else if (box.clickedButton() == accept) {
+            app::acceptTempoDrift(controller_.document(), outcome.desynced);
+        }
+    } catch (const std::exception& error) {
+        showStatus(toQString(error.what()));
     }
 }
 

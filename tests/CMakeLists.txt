@@ -14,6 +14,7 @@ ibs_add_test_suite(ibs_core_tests
         unit/core/audio/AudioBufferTest.cpp
         unit/core/audio/WaveformPyramidTest.cpp
         unit/core/bmson/BmsonEquivalenceTest.cpp
+        unit/core/chart/ChartEditingTest.cpp
         unit/core/bmson/BmsonExportTest.cpp
         unit/core/bmson/BmsonImportTest.cpp
         unit/core/midi/MidiExporterTest.cpp
@@ -24,6 +25,7 @@ ibs_add_test_suite(ibs_core_tests
         unit/core/slicing/FftTest.cpp
         unit/core/slicing/OnsetDetectorTest.cpp
         unit/core/timing/BarLinesTest.cpp
+        unit/core/timing/TimingEditsTest.cpp
         unit/core/timing/TimingMapTest.cpp
         unit/core/validation/ValidatorTest.cpp
     LIBRARIES ibs::core)
@@ -43,6 +45,7 @@ ibs_add_test_suite(ibs_app_tests
         unit/app/ArrangementCommandsTest.cpp
         unit/app/AssetImportServiceTest.cpp
         unit/app/AudioLibraryTest.cpp
+        unit/app/ChartCommandsTest.cpp
         unit/app/ChartServiceTest.cpp
         unit/app/EditorDocumentTest.cpp
         unit/app/PlaybackServiceTest.cpp
@@ -58,7 +61,7 @@ ibs_add_test_suite(ibs_external_tests
 
 if(IBS_BUILD_GUI)
     find_package(Qt6 6.4 REQUIRED COMPONENTS Test)
-    add_executable(ibs_gui_tests gui/GuiTestMain.cpp gui/StudioGuiTest.cpp)
+    add_executable(ibs_gui_tests gui/GuiTestMain.cpp gui/StudioGuiTest.cpp gui/ChartEditorGuiTest.cpp)
     target_link_libraries(ibs_gui_tests PRIVATE ibs::gui Qt6::Test GTest::gtest ibs::compiler_options)
     # Why not gtest_discover_tests で 1 件ずつ登録する: 一覧を取り出すときにも Qt の DLL が必要で、
     # Windows では PATH を通す前に実行されて失敗するため、まとめて 1 件として登録し、環境変数を設定して実行する

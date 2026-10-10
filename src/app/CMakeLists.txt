@@ -2,6 +2,7 @@ add_library(ibs_app STATIC
     src/ArrangementCommands.cpp
     src/AssetImportService.cpp
     src/AudioLibrary.cpp
+    src/ChartCommands.cpp
     src/ChartService.cpp
     src/ChartStorage.cpp
     src/EditorDocument.cpp

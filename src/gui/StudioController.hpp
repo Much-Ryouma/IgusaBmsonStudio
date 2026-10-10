@@ -2,6 +2,7 @@
 
 #include <cstdint>
 #include <filesystem>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <vector>
@@ -13,6 +14,7 @@
 
 #include "ibs/app/AssetImportService.hpp"
 #include "ibs/app/AudioLibrary.hpp"
+#include "ibs/app/ChartCommands.hpp"
 #include "ibs/app/ChartService.hpp"
 #include "ibs/app/EditorDocument.hpp"
 #include "ibs/app/PlaybackService.hpp"
@@ -49,6 +51,7 @@ public:
     [[nodiscard]] app::SlicingSession& slicing() noexcept { return slicing_; }
     [[nodiscard]] app::PlaybackService& playback() noexcept { return playback_; }
     [[nodiscard]] const app::MixSettings& mix() const noexcept { return mix_; }
+    [[nodiscard]] const core::KeyMode* keyMode() const;
 
     void newProject(const NewProjectSettings& settings);
     bool open(const std::filesystem::path& path, QString* error);
@@ -60,6 +63,14 @@ public:
     void selectPlacement(std::optional<core::PlacementId> placement);
     [[nodiscard]] const std::vector<core::CutPointId>& selectedCuts() const noexcept { return selectedCuts_; }
     void setSelectedCuts(std::vector<core::CutPointId> cuts);
+    void focusCuts(std::vector<core::CutPointId> cuts);
+    [[nodiscard]] const std::vector<core::NoteId>& selectedNotes() const noexcept { return selectedNotes_; }
+    void setSelectedNotes(std::vector<core::NoteId> notes);
+
+    void copySelectedNotes();
+    core::PasteResult pasteAtCursor();
+    [[nodiscard]] bool hasCopiedPattern() const noexcept { return !clipboard_.entries.empty(); }
+    app::TimingEditOutcome editTiming(const QString& label, const std::function<void(core::TimingData&)>& edit);
 
     [[nodiscard]] int snapDivisions() const noexcept { return snapDivisions_; }
     void setSnapDivisions(int divisions);
@@ -101,6 +112,7 @@ signals:
     void mixChanged();
     void analysisStateChanged(bool analyzing);
     void statusMessage(const QString& message);
+    void tempoDesynced(const app::TimingEditOutcome& outcome);
 
 private:
     void onDocumentChanged();
@@ -120,6 +132,8 @@ private:
     app::MixSettings mix_;
     std::optional<core::PlacementId> selectedPlacement_;
     std::vector<core::CutPointId> selectedCuts_;
+    std::vector<core::NoteId> selectedNotes_;
+    core::NotePattern clipboard_;
     int snapDivisions_ = 16;
     core::Pulse cursorPulse_ = 0;
     bool autoPreview_ = true;

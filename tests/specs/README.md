@@ -37,18 +37,20 @@ tests/specs/
 
 | ファイル | 対象 | ID | 状態 |
 |---|---|---|---|
-| [core/timing.md](core/timing.md) | pulse ⇔ 秒の変換（`TimingMap`） | TIM | 実装済み |
+| [core/timing.md](core/timing.md) | pulse ⇔ 秒の変換（`TimingMap`）、BPM・STOP・拍子・小節線の編集 | TIM / TED | 実装済み |
 | [core/project.md](core/project.md) | 編集モデル（素材・配置・切断点・ノーツ） | PRJ | 実装済み |
 | [core/bmson_conversion.md](core/bmson_conversion.md) | bmson ⇔ 編集モデルの変換、再生内容の同値判定 | BMI / BME / BEQ | 実装済み |
 | [core/validation.md](core/validation.md) | 素材パス、検証ルール、モード定義 | AST / VAL / KEY | 実装済み |
 | [infra/bmson_json.md](infra/bmson_json.md) | JSON の読み書き、ファイル操作、モード定義ファイル | JSN / FIO / KMJ | 実装済み |
 | [app/chart_service.md](app/chart_service.md) | 開く・検証・保存、完成品での往復テスト | APP / EXT | 実装済み |
 | [app/editing.md](app/editing.md) | Undo、配置と切断点の操作、素材の取り込み、表示範囲とスナップ | EDT / ARR / IMP / VPT | 実装済み |
+| [app/chart_commands.md](app/chart_commands.md) | 譜面編集の操作と Undo、テンポ変更後の切断点 | CMD | 実装済み |
 | [app/slicing_playback.md](app/slicing_playback.md) | 素材の読み込み、試聴、音切りのプレビューと適用 | AUL / PLY / SLS | 実装済み |
 | [gui/studio.md](gui/studio.md) | 画面の操作（画面を出さずに実行する自動テスト） | GUI | 実装済み |
 | [gui/manual_checklist.md](gui/manual_checklist.md) | 見た目と実際の音の手動チェックリスト | — | M3 |
 | [core/slicing.md](core/slicing.md) | 音声バッファ、FFT、立ち上がりの検出、波形の縮小表示、グリッドとクオンタイズ、小節線と拍子 | AUD / FFT / ONS / WAV / QNT / CUT / APL / BAR | 実装済み |
 | [core/playback.md](core/playback.md) | 試聴の範囲、曲のミックス | RNG | 実装済み |
+| [core/chart_editing.md](core/chart_editing.md) | レーン割当、パターンの貼り付け、変形、テンポ変更でずれる配置 | CHE | 実装済み |
 | [core/midi.md](core/midi.md) | MIDI の組み立て、SMF の書き出し、MIDI プロファイル | MID / SMF / MPF | 実装済み |
 | [infra/audio.md](infra/audio.md) | 音声の読み込み、音切りのユースケース | DEC / SLC | 実装済み |
 

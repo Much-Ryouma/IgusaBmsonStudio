@@ -175,5 +175,60 @@ TEST(Project, PRJ016_ListsCutPointsOfPlacementInTimeOrder) {
     EXPECT_EQ(project.cutPointsOf(placement), expected);
 }
 
+TEST(Project, PRJ017_EditsAndRemovesNotes) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("bass.wav"), 0, 0);
+    const CutPointId cut = project.addCutPoint(placement, 240, CutOrigin::Auto);
+    const NoteId note = project.addNote(cut, 1, 0);
+
+    project.setNoteLength(note, 480);
+    EXPECT_EQ(project.note(note).lengthPulses, 480);
+    EXPECT_THROW(project.setNoteLength(note, -1), std::invalid_argument);
+    EXPECT_EQ(project.notesOf(cut), std::vector<NoteId>{note});
+
+    project.removeNote(note);
+    EXPECT_FALSE(project.containsNote(note));
+    EXPECT_THROW(project.removeNote(note), std::invalid_argument);
+}
+
+TEST(Project, PRJ018_RemapsLanesAsOneChangeAndRejectsCollisions) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("bass.wav"), 0, 0);
+    const CutPointId cut = project.addCutPoint(placement, 240, CutOrigin::Auto);
+    const NoteId first = project.addNote(cut, 1, 0);
+    const NoteId second = project.addNote(cut, 2, 0);
+
+    project.remapNoteLanes({{first, 2}, {second, 1}});
+    EXPECT_EQ(project.note(first).lane, 2);
+    EXPECT_EQ(project.note(second).lane, 1);
+
+    EXPECT_THROW(project.remapNoteLanes({{first, 1}}), std::invalid_argument);
+    EXPECT_THROW(project.remapNoteLanes({{first, 0}}), std::invalid_argument);
+    EXPECT_EQ(project.note(first).lane, 2);
+}
+
+TEST(Project, PRJ019_RetimingKeepsTheCutOrigin) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("bass.wav"), 0, 0);
+    const CutPointId cut = project.addCutPoint(placement, 240, CutOrigin::Auto);
+
+    project.retimeCutPoint(cut, 250);
+
+    EXPECT_EQ(project.cutPoint(cut).offsetPulses, 250);
+    EXPECT_EQ(project.cutPoint(cut).origin, CutOrigin::Auto);
+}
+
+TEST(Project, PRJ020_TempoAffectedMarkFollowsThePlacement) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("bass.wav"), 0, 0);
+
+    project.markTempoAffected(placement);
+    EXPECT_TRUE(project.tempoAffectedPlacements().contains(placement));
+    project.removePlacement(placement);
+
+    EXPECT_TRUE(project.tempoAffectedPlacements().empty());
+    EXPECT_THROW(project.markTempoAffected(placement), std::invalid_argument);
+}
+
 }  // namespace
 }  // namespace ibs::core

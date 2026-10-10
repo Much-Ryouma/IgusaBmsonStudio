@@ -4,6 +4,8 @@ qt_standard_project_setup()
 add_library(ibs_gui STATIC
     ArrangerWidget.cpp
     ArrangerWidget.hpp
+    ChartEditorWidget.cpp
+    ChartEditorWidget.hpp
     MainWindow.cpp
     MainWindow.hpp
     QtText.hpp

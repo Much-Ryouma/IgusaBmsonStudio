@@ -4,6 +4,7 @@
 #include <QMouseEvent>
 #include <QWidget>
 
+#include "../unit/support/Beat7k.hpp"
 #include "../unit/support/FakeAppPorts.hpp"
 #include "../unit/support/SyntheticAudio.hpp"
 #include "ArrangerWidget.hpp"
@@ -26,10 +27,16 @@ inline core::AudioBuffer drumHits() {
     return core::AudioBuffer{ibs::testing::kTestSampleRate, 1, std::move(signal)};
 }
 
+inline core::KeyModeCatalog beat7kCatalog() {
+    core::KeyModeCatalog catalog;
+    catalog.add(ibs::testing::beat7k());
+    return catalog;
+}
+
 class GuiFixture {
 public:
     GuiFixture()
-        : controller_(StudioPorts{storage_, source_, output_, files_, {}}), window_(controller_) {
+        : controller_(StudioPorts{storage_, source_, output_, files_, beat7kCatalog()}), window_(controller_) {
         source_.buffers[kChartDirectory / "drums.wav"] = drumHits();
         NewProjectSettings settings;
         settings.chartPath = kChartDirectory / "song.bmson";
@@ -38,7 +45,7 @@ public:
         controller_.newProject(settings);
         asset = controller_.document().apply("素材", [](core::Project& project) { return project.addAsset("drums.wav"); });
         placement = app::placeAsset(controller_.document(), asset, 960);
-        window_.resize(1200, 800);
+        window_.resize(1200, 900);
         window_.show();
         settle();
     }
