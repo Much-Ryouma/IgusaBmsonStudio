@@ -4,7 +4,14 @@ configure_file(
     @ONLY)
 
 add_library(ibs_core STATIC
-    src/timing/TimingMap.cpp)
+    src/asset/AssetPath.cpp
+    src/bmson/BmsonEquivalence.cpp
+    src/bmson/BmsonExporter.cpp
+    src/bmson/BmsonImporter.cpp
+    src/mode/KeyMode.cpp
+    src/model/Project.cpp
+    src/timing/TimingMap.cpp
+    src/validation/Validator.cpp)
 add_library(ibs::core ALIAS ibs_core)
 
 target_include_directories(ibs_core

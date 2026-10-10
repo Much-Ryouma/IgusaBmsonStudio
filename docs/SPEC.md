@@ -446,8 +446,8 @@ tests/
 
 | # | 内容 | 完了条件 |
 |---|---|---|
-| M0 | リポジトリ、CMake 構成、CI（GitHub Actions / Windows）、コーディング規約 | 空のターゲットがビルドでき、テストが回る |
-| M1 | core: ドメインモデル、TimingMap、bmson 入出力、検証 | 既存の bmson を読み込み、書き出して一致する |
+| M0 ✅ | リポジトリ、CMake 構成、CI（GitHub Actions / Windows）、コーディング規約 | 空のターゲットがビルドでき、テストが回る |
+| M1 ✅ | core: ドメインモデル、TimingMap、bmson 入出力、検証 | 既存の bmson を読み込み、書き出して一致する（完成品の例 6 譜面で確認済み） |
 | M2 | Slicer: デコード、オンセット検出、クオンタイズ、MIDI 出力（core＋CLI の `slice` / `midi`） | フィクスチャで検出精度のテストに通る |
 | M3 | GUI: アレンジャー、波形ビュー、切断点編集、スライス試聴 | フレーズを配置して音切りができる |
 | M4 | GUI: 譜面エディタ（割当モード、LN、BPM/STOP、小節線、Undo） | 1曲分の 7key 譜面が作れる |

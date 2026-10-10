@@ -1,4 +1,9 @@
-# Why not 空の STATIC ライブラリ: infra と同じ理由。ユースケースを実装する M1 以降で STATIC に切り替える
-add_library(ibs_app INTERFACE)
+add_library(ibs_app STATIC
+    src/ChartService.cpp
+    src/ChartStorage.cpp)
 add_library(ibs::app ALIAS ibs_app)
-target_link_libraries(ibs_app INTERFACE ibs::core ibs::infra)
+
+target_include_directories(ibs_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)
+target_link_libraries(ibs_app
+    PUBLIC ibs::core ibs::infra
+    PRIVATE ibs::compiler_options)

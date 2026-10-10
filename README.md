@@ -7,7 +7,7 @@
 - **プレビュー**: 外部プレーヤー（[Pulsus](https://github.com/GoaLitiuM/Pulsus)）で任意の小節から再生
 - **出力**: bmson、MIDI（切断点）
 
-> 開発中です（マイルストーン M0: プロジェクト骨格）。現時点ではまだ譜面を作れません。
+> 開発中です（マイルストーン M1 完了: bmson の読み書きと検証）。GUI での編集はまだできません。
 
 ## ドキュメント
 
@@ -24,7 +24,7 @@
 - CMake 3.24 以上
 - Qt 6.5 以上（MSVC 2022 64bit 版）
 
-GoogleTest と CLI11 は、CMake の構成時に自動でダウンロードされます。
+GoogleTest、CLI11、nlohmann/json は、CMake の構成時に自動でダウンロードされます。
 
 ### 手順
 
@@ -50,6 +50,28 @@ C:\Qt\6.8.0\msvc2022_64\bin\windeployqt.exe build\msvc\src\gui\Release\IgusaBmso
 
 Qt を使わずに core / CLI / テストだけをビルドする場合は、`core-only` プリセット（Ninja）を使います。
 
+### 日本語を含むフォルダでビルドする（Building in a folder with Japanese characters）
+
+ソースやビルドのパスに日本語などの ASCII 以外の文字が含まれると、CMake・依存ライブラリの展開・コンパイラのどこかで失敗することがあります（構成時に警告が出ます）。
+フォルダを移動せずに済ませるには、`subst` で ASCII だけのドライブ名を割り当て、そちらからビルドします。
+
+```bat
+subst B: "D:\ClaudeCodeのお部屋\bmsonworkstation"
+```
+
+Qt Creator では `B:\CMakeLists.txt` を開き直してください（以前のビルドフォルダは削除してから構成し直します）。
+`subst` の割り当ては再起動で消えるので、毎回実行するか、スタートアップに登録してください。
+
+## コマンドラインツール
+
+```bat
+igusa-cli info     "曲[ANOTHER].bmson"            :: 譜面の概要（--json で JSON 出力）
+igusa-cli validate "曲[ANOTHER].bmson"            :: 検証。エラーがあれば終了コード 1
+igusa-cli convert  in.bmson out.bmson --check     :: 編集モデルを通して書き出し、再生内容が同じか確認
+```
+
+終了コード: 0 = 成功、1 = 検証エラー、2 = 引数エラー、3 = 入出力エラー
+
 ## ディレクトリ構成
 
 ```
@@ -68,4 +90,4 @@ midi_profiles MIDI 出力の形式定義
 
 [MIT](LICENSE)
 
-依存ライブラリ: Qt（LGPL v3、動的リンク）、CLI11（BSD-3-Clause）、GoogleTest（BSD-3-Clause、テストのみ）
+依存ライブラリ: Qt（LGPL v3、動的リンク）、nlohmann/json（MIT）、CLI11（BSD-3-Clause）、GoogleTest（BSD-3-Clause、テストのみ）

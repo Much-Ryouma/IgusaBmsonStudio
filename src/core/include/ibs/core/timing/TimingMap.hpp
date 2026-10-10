@@ -10,11 +10,15 @@ using Pulse = std::int64_t;
 struct BpmEvent {
     Pulse y = 0;
     double bpm = 0.0;
+
+    friend bool operator==(const BpmEvent&, const BpmEvent&) = default;
 };
 
 struct StopEvent {
     Pulse y = 0;
     Pulse durationPulses = 0;
+
+    friend bool operator==(const StopEvent&, const StopEvent&) = default;
 };
 
 class TimingMap {

@@ -9,6 +9,7 @@ compile_commands.json
 .vscode/
 .idea/
 *.user
+.qtcreator/
 
 # User's own works used only as local references (must not be published)
 /appendix/

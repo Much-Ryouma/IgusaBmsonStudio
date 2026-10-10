@@ -14,6 +14,16 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
+foreach(ibs_path IN ITEMS "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    if(NOT ibs_path MATCHES "^[ -~]*$")
+        # Why not 日本語で表示する: CMake は UTF-8 で出力するが、Qt Creator などは CP932 として表示するため文字化けする
+        message(WARNING
+            "The path contains non-ASCII characters: ${ibs_path}\n"
+            "Some tools may fail with such paths. "
+            "If the build fails, see README: 'Building in a folder with Japanese characters'.")
+    endif()
+endforeach()
+
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerOptions)
 include(Dependencies)
