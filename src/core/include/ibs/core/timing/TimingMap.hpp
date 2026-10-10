@@ -31,6 +31,7 @@ public:
     [[nodiscard]] double initialBpm() const noexcept { return initialBpm_; }
 
     [[nodiscard]] double secondsAt(Pulse y) const;
+    [[nodiscard]] double pulseAt(double seconds) const;
     [[nodiscard]] double bpmAt(Pulse y) const;
 
 private:

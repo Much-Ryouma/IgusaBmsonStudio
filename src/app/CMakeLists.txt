@@ -1,6 +1,7 @@
 add_library(ibs_app STATIC
     src/ChartService.cpp
-    src/ChartStorage.cpp)
+    src/ChartStorage.cpp
+    src/SlicingService.cpp)
 add_library(ibs::app ALIAS ibs_app)
 
 target_include_directories(ibs_app PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

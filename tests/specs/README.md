@@ -43,6 +43,9 @@ tests/specs/
 | [core/validation.md](core/validation.md) | 素材パス、検証ルール、モード定義 | AST / VAL / KEY | 実装済み |
 | [infra/bmson_json.md](infra/bmson_json.md) | JSON の読み書き、ファイル操作、モード定義ファイル | JSN / FIO / KMJ | 実装済み |
 | [app/chart_service.md](app/chart_service.md) | 開く・検証・保存、完成品での往復テスト | APP / EXT | 実装済み |
+| [core/slicing.md](core/slicing.md) | 音声バッファ、FFT、立ち上がりの検出、グリッドとクオンタイズ、小節線と拍子 | AUD / FFT / ONS / QNT / CUT / APL / BAR | 実装済み |
+| [core/midi.md](core/midi.md) | MIDI の組み立て、SMF の書き出し、MIDI プロファイル | MID / SMF / MPF | 実装済み |
+| [infra/audio.md](infra/audio.md) | 音声の読み込み、音切りのユースケース | DEC / SLC | 実装済み |
 
 ## 手元の作品で往復テストを実行する
 
@@ -51,4 +54,12 @@ tests/specs/
 ```bat
 set IBS_EXTERNAL_SAMPLES_DIR=D:\path\to\charts
 ctest --preset windows-msvc-release -R SampleRoundTrip --output-on-failure
+```
+
+## 音切りの精度を手元の作品で測る
+
+作者が実際に置いた切断点と、自動検出の結果を照合するスクリプトです（Python 3 が必要です）。テストではなく、パラメータを調整するときの目安に使います。
+
+```bat
+python tools\evaluate_slicing.py build\core-only\src\cli\igusa-cli.exe "曲\譜面.bmson" "曲\ステムのフォルダ" --sensitivity 0.6
 ```

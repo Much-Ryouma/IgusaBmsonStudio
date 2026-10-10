@@ -106,6 +106,19 @@ double TimingMap::secondsAt(Pulse y) const {
     return segment.resumeSeconds + static_cast<double>(y - segment.startPulse) * segment.secondsPerPulse;
 }
 
+double TimingMap::pulseAt(double seconds) const {
+    const auto firstAfter = std::upper_bound(
+        segments_.cbegin(), segments_.cend(), seconds,
+        [](double value, const Segment& segment) { return value < segment.reachSeconds; });
+    const Segment& segment = firstAfter == segments_.cbegin() ? segments_.front() : *std::prev(firstAfter);
+    if (seconds <= segment.resumeSeconds) {
+        // Why not 停止中の経過時間を比例配分する: 停止中は譜面が進まないので、その間の時刻はすべて停止位置に対応する
+        return static_cast<double>(segment.startPulse) +
+               std::min(0.0, (seconds - segment.reachSeconds) / segment.secondsPerPulse);
+    }
+    return static_cast<double>(segment.startPulse) + (seconds - segment.resumeSeconds) / segment.secondsPerPulse;
+}
+
 double TimingMap::bpmAt(Pulse y) const {
     return segmentContaining(y).bpm;
 }

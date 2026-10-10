@@ -7,7 +7,7 @@
 - **プレビュー**: 外部プレーヤー（[Pulsus](https://github.com/GoaLitiuM/Pulsus)）で任意の小節から再生
 - **出力**: bmson、MIDI（切断点）
 
-> 開発中です（マイルストーン M1 完了: bmson の読み書きと検証）。GUI での編集はまだできません。
+> 開発中です（マイルストーン M2 完了: 音切りと MIDI 出力をコマンドラインで使えます）。GUI での編集はまだできません。
 
 ## ドキュメント
 
@@ -24,7 +24,7 @@
 - CMake 3.24 以上
 - Qt 6.5 以上（MSVC 2022 64bit 版）
 
-GoogleTest、CLI11、nlohmann/json は、CMake の構成時に自動でダウンロードされます。
+GoogleTest、CLI11、nlohmann/json、miniaudio、stb_vorbis は、CMake の構成時に自動でダウンロードされます（ハッシュで内容を確認します）。
 
 ### 手順
 
@@ -68,7 +68,13 @@ Qt Creator では `B:\CMakeLists.txt` を開き直してください（以前の
 igusa-cli info     "曲[ANOTHER].bmson"            :: 譜面の概要（--json で JSON 出力）
 igusa-cli validate "曲[ANOTHER].bmson"            :: 検証。エラーがあれば終了コード 1
 igusa-cli convert  in.bmson out.bmson --check     :: 編集モデルを通して書き出し、再生内容が同じか確認
+igusa-cli slice    bass.wav --bpm 175 --grid 16     :: 音の立ち上がりを検出し、16 分グリッドに寄せた切断点を表示
+igusa-cli slice    bass.wav --chart song.bmson --bmson cuts.bmson   :: 譜面のテンポ・小節線を使い、結果を bmson に書き出す
+igusa-cli midi     song.bmson -o cuts.mid           :: 切断点を MIDI に（既定はプナイプナイえんそう互換）
+igusa-cli midi     song.bmson -o tempo.mid --profile generic --tempo-only   :: テンポマップだけを DAW 用に
 ```
+
+`slice` の主なオプション: `--sensitivity`（0〜1、既定 0.5）、`--function flux|energy|hfc`、`--min-interval`（ms）、`--gate`（dBFS）、`--preroll`（ms）、`--grid`（0 で寄せない）、`--strength`、`--window`（ms）。一覧は `igusa-cli slice --help` で確認できます。
 
 終了コード: 0 = 成功、1 = 検証エラー、2 = 引数エラー、3 = 入出力エラー
 
@@ -82,6 +88,7 @@ src/gui      Qt の画面
 src/cli      コマンドラインツール
 tests/specs  テスト仕様（markdown）
 tests/unit   テストコード（GoogleTest）
+tools        開発用のスクリプト（音切りの精度評価など）
 modes        譜面モードの定義（レーン構成）
 midi_profiles MIDI 出力の形式定義
 ```
@@ -90,4 +97,4 @@ midi_profiles MIDI 出力の形式定義
 
 [MIT](LICENSE)
 
-依存ライブラリ: Qt（LGPL v3、動的リンク）、nlohmann/json（MIT）、CLI11（BSD-3-Clause）、GoogleTest（BSD-3-Clause、テストのみ）
+依存ライブラリ: Qt（LGPL v3、動的リンク）、nlohmann/json（MIT）、CLI11（BSD-3-Clause）、miniaudio（Public Domain / MIT-0）、stb_vorbis（Public Domain / MIT）、GoogleTest（BSD-3-Clause、テストのみ）

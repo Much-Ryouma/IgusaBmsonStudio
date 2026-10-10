@@ -18,11 +18,18 @@ jobs:
           arch: win64_msvc2022_64
           cache: true
 
+      # Why not "Visual Studio 17 2022" ジェネレータ: windows-latest のイメージ更新で VS 2022 がなくなると構成ごと失敗するため、
+      # 入っている MSVC を開発者環境として読み込み、Ninja でビルドする
+      - name: Set up MSVC developer environment
+        uses: ilammy/msvc-dev-cmd@v1
+        with:
+          arch: x64
+
       - name: Configure
-        run: cmake --preset windows-msvc -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
+        run: cmake --preset ci-windows -DCMAKE_PREFIX_PATH="${{ env.QT_ROOT_DIR }}"
 
       - name: Build
-        run: cmake --build --preset windows-msvc-release
+        run: cmake --build --preset ci-windows
 
       - name: Test
-        run: ctest --preset windows-msvc-release
+        run: ctest --preset ci-windows

@@ -94,5 +94,18 @@ TEST(Project, PRJ010_AllowsOneSliceOnSeveralLanes) {
     EXPECT_EQ(project.notes().size(), 2u);
 }
 
+TEST(Project, PRJ011_RemovesOnlyUnassignedNonHeadCutPoints) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("kick.wav"), 0, 0);
+    const CutPointId assigned = project.addCutPoint(placement, 240, CutOrigin::Auto);
+    project.addNote(assigned, 1, 0);
+    const CutPointId free = project.addCutPoint(placement, 480, CutOrigin::Auto);
+
+    EXPECT_THROW(project.removeCutPoint(project.headCutPointOf(placement)), std::invalid_argument);
+    EXPECT_THROW(project.removeCutPoint(assigned), std::invalid_argument);
+    project.removeCutPoint(free);
+    EXPECT_EQ(project.cutPoints().size(), 2u);
+}
+
 }  // namespace
 }  // namespace ibs::core

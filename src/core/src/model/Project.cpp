@@ -76,6 +76,21 @@ NoteId Project::addNote(CutPointId cutPointId, int lane, Pulse lengthPulses) {
     return id;
 }
 
+void Project::removeCutPoint(CutPointId cutPointId) {
+    const CutPoint& target = cutPoint(cutPointId);
+    if (target.offsetPulses == 0) {
+        throw std::invalid_argument("the placement head cut point cannot be removed");
+    }
+    if (hasNotes(cutPointId)) {
+        throw std::invalid_argument("cut point has notes; remove or move them first");
+    }
+    std::erase_if(cutPoints_, [cutPointId](const CutPoint& existing) { return existing.id == cutPointId; });
+}
+
+bool Project::hasNotes(CutPointId cutPointId) const {
+    return std::any_of(notes_.begin(), notes_.end(), [cutPointId](const Note& note) { return note.cutPointId == cutPointId; });
+}
+
 const Asset& Project::asset(AssetId id) const { return findById(assets_, id, "asset"); }
 
 const Placement& Project::placement(PlacementId id) const { return findById(placements_, id, "placement"); }

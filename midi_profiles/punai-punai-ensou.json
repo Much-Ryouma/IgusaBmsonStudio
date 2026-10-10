@@ -6,6 +6,7 @@
   "conductor_track": false,
   "tempo_in_every_track": true,
   "time_signature": false,
+  "stop_as_marker": false,
   "track_per": "asset",
   "track_name": "asset_basename",
   "channel": 1,

@@ -3,7 +3,7 @@ cmake_minimum_required(VERSION 3.24)
 project(IgusaBmsonStudio
     VERSION 0.1.0
     DESCRIPTION "bmson chart authoring tool: slicing, chart editing and preview"
-    LANGUAGES CXX)
+    LANGUAGES C CXX)
 
 option(IBS_BUILD_GUI   "Build the Qt GUI application" ON)
 option(IBS_BUILD_CLI   "Build the command line tool" ON)

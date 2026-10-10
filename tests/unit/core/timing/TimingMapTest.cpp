@@ -77,5 +77,25 @@ TEST(TimingMap, TIM011_RejectsNegativeTempoOrNegativePulse) {
     EXPECT_THROW(TimingMap(120.0, 240, {}, {{-1, 240}}), std::invalid_argument);
 }
 
+TEST(TimingMap, TIM012_PulseAtInvertsSecondsAtAcrossTempoChange) {
+    const TimingMap timing(120.0, 240, {{480, 60.0}});
+
+    EXPECT_NEAR(timing.pulseAt(2.0), 720.0, kTolerance);
+}
+
+TEST(TimingMap, TIM013_TimeDuringStopMapsToStopPulse) {
+    const TimingMap timing(60.0, 240, {}, {{240, 240}});
+
+    for (const double seconds : {1.0, 1.5, 2.0}) {
+        EXPECT_NEAR(timing.pulseAt(seconds), 240.0, kTolerance) << seconds;
+    }
+}
+
+TEST(TimingMap, TIM014_TimeAfterStopResumesFromStopPulse) {
+    const TimingMap timing(60.0, 240, {}, {{240, 240}});
+
+    EXPECT_NEAR(timing.pulseAt(2.5), 360.0, kTolerance);
+}
+
 }  // namespace
 }  // namespace ibs::core

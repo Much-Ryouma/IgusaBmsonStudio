@@ -1,6 +1,6 @@
 # タイミング変換 (core/timing)
 
-- 対象: `ibs::core::TimingMap`
+- 対象: `ibs::core::TimingMap`（`secondsAt` / `pulseAt` / `bpmAt`）
 - テストコード: `tests/unit/core/timing/TimingMapTest.cpp`
 - 根拠: bmson 仕様「Timing」「Order of Processing」、SPEC.md §4.1（resolution の保持）
 
@@ -24,3 +24,6 @@ BPM 変化と STOP を、bmson 仕様の処理順（ノーツ → BPM → STOP�
 | TIM-009 | BPM 変化を pulse の降順で渡す | 各位置を秒に変換 | 昇順で渡したときと同じ結果 |
 | TIM-010 | init_bpm = 0、または resolution = 0 | TimingMap を作る | `std::invalid_argument` を投げる |
 | TIM-011 | BPM 変化の bpm が負、または位置が負 | TimingMap を作る | `std::invalid_argument` を投げる |
+| TIM-012 | init_bpm = 120, resolution = 240, pulse 480 で BPM 60 に変化 | 2.0 秒を pulse に変換 | 720（`secondsAt` の逆変換になる） |
+| TIM-013 | init_bpm = 60, resolution = 240, pulse 240 に STOP 240 pulse | 1.0〜2.0 秒を pulse に変換 | すべて 240（停止中は譜面が進まない） |
+| TIM-014 | TIM-013 と同じ | 2.5 秒を pulse に変換 | 360 |

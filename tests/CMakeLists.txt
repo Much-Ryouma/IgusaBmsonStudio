@@ -11,25 +11,34 @@ endfunction()
 ibs_add_test_suite(ibs_core_tests
     SOURCES
         unit/core/asset/AssetPathTest.cpp
+        unit/core/audio/AudioBufferTest.cpp
         unit/core/bmson/BmsonEquivalenceTest.cpp
         unit/core/bmson/BmsonExportTest.cpp
         unit/core/bmson/BmsonImportTest.cpp
+        unit/core/midi/MidiExporterTest.cpp
         unit/core/mode/KeyModeTest.cpp
         unit/core/model/ProjectTest.cpp
+        unit/core/slicing/CutPlannerTest.cpp
+        unit/core/slicing/FftTest.cpp
+        unit/core/slicing/OnsetDetectorTest.cpp
+        unit/core/timing/BarLinesTest.cpp
         unit/core/timing/TimingMapTest.cpp
         unit/core/validation/ValidatorTest.cpp
     LIBRARIES ibs::core)
 
 ibs_add_test_suite(ibs_infra_tests
     SOURCES
+        unit/infra/audio/AudioFileDecoderTest.cpp
         unit/infra/bmson/BmsonJsonCodecTest.cpp
         unit/infra/fs/FileIoTest.cpp
+        unit/infra/midi/StandardMidiFileTest.cpp
         unit/infra/mode/KeyModeJsonLoaderTest.cpp
     LIBRARIES ibs::infra)
 
 ibs_add_test_suite(ibs_app_tests
     SOURCES
         unit/app/ChartServiceTest.cpp
+        unit/app/SlicingServiceTest.cpp
     LIBRARIES ibs::app)
 
 ibs_add_test_suite(ibs_external_tests

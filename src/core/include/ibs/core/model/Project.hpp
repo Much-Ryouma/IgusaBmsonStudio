@@ -51,6 +51,9 @@ public:
     PlacementId addPlacement(AssetId assetId, Pulse startPulse, int channelGroup);
     CutPointId addCutPoint(PlacementId placementId, Pulse offsetPulses, CutOrigin origin);
     NoteId addNote(CutPointId cutPointId, int lane, Pulse lengthPulses);
+    void removeCutPoint(CutPointId cutPointId);
+
+    [[nodiscard]] bool hasNotes(CutPointId cutPointId) const;
 
     [[nodiscard]] const std::vector<Asset>& assets() const noexcept { return assets_; }
     [[nodiscard]] const std::vector<Placement>& placements() const noexcept { return placements_; }

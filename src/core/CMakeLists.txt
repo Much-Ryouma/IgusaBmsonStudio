@@ -5,11 +5,17 @@ configure_file(
 
 add_library(ibs_core STATIC
     src/asset/AssetPath.cpp
+    src/audio/AudioBuffer.cpp
     src/bmson/BmsonEquivalence.cpp
     src/bmson/BmsonExporter.cpp
     src/bmson/BmsonImporter.cpp
+    src/midi/MidiExporter.cpp
     src/mode/KeyMode.cpp
     src/model/Project.cpp
+    src/slicing/CutPlanner.cpp
+    src/slicing/Fft.cpp
+    src/slicing/OnsetDetector.cpp
+    src/timing/BarLines.cpp
     src/timing/TimingMap.cpp
     src/validation/Validator.cpp)
 add_library(ibs::core ALIAS ibs_core)

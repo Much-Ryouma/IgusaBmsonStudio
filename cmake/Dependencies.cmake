@@ -4,17 +4,21 @@ include(FetchContent)
 
 # Why not FetchContent で取得する: アーカイブの展開と依存先の project() 呼び出しが、日本語を含むパスや
 # Qt Creator の自動設定スクリプトと組み合わさると構成ごと失敗することがあるため、ハッシュ付きの単一ヘッダだけを取得する
+function(ibs_download_file url sha256 destination)
+    if(EXISTS "${destination}")
+        return()
+    endif()
+    file(DOWNLOAD "${url}" "${destination}" EXPECTED_HASH SHA256=${sha256} TLS_VERIFY ON STATUS status)
+    list(GET status 0 code)
+    if(NOT code EQUAL 0)
+        file(REMOVE "${destination}")
+        message(FATAL_ERROR "Failed to download ${url}: ${status}")
+    endif()
+endfunction()
+
 function(ibs_add_single_header_library target alias url sha256 relative_path)
     set(include_root "${CMAKE_BINARY_DIR}/_deps/${target}")
-    set(header "${include_root}/${relative_path}")
-    if(NOT EXISTS "${header}")
-        file(DOWNLOAD "${url}" "${header}" EXPECTED_HASH SHA256=${sha256} TLS_VERIFY ON STATUS status)
-        list(GET status 0 code)
-        if(NOT code EQUAL 0)
-            file(REMOVE "${header}")
-            message(FATAL_ERROR "Failed to download ${url}: ${status}")
-        endif()
-    endif()
+    ibs_download_file("${url}" "${sha256}" "${include_root}/${relative_path}")
     add_library(${target} INTERFACE)
     add_library(${alias} ALIAS ${target})
     target_include_directories(${target} SYSTEM INTERFACE "${include_root}")
@@ -31,6 +35,16 @@ if(IBS_BUILD_CLI)
         3935283e4c9db7089ed304476dbab2805c9311c41b125a55e92da4659df0d660
         CLI/CLI.hpp)
 endif()
+
+set(IBS_AUDIO_DEPS_DIR "${CMAKE_BINARY_DIR}/_deps/ibs_audio")
+ibs_download_file(
+    https://raw.githubusercontent.com/mackron/miniaudio/0.11.21/miniaudio.h
+    6b2029714f8634c4d7c70cc042f45074e0565766113fc064f20cd27c986be9c9
+    "${IBS_AUDIO_DEPS_DIR}/miniaudio.h")
+ibs_download_file(
+    https://raw.githubusercontent.com/nothings/stb/f58f558c120e9b32c217290b80bad1a0729fbb2c/stb_vorbis.c
+    4c7cb2ff1f7011e9d67950446b7eb9ca044f2e464d76bfbb0b84dd2e23e65636
+    "${IBS_AUDIO_DEPS_DIR}/stb_vorbis.c")
 
 if(IBS_BUILD_TESTS)
     # Why not 静的 CRT: GoogleTest の既定 (/MT) のままだと他ターゲット (/MD) とリンク時に衝突するため

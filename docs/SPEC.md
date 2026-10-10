@@ -1,4 +1,4 @@
-# IgusaBmsonStudio 仕様書（v0.5）
+# IgusaBmsonStudio 仕様書（v0.6）
 
 - 作成日: 2026-10-10
 - 状態: 実装中に出た論点は §13 に追記する
@@ -15,6 +15,7 @@
 | v0.3 | 2026-10-10 | MIT ライセンス・GitHub 公開に決定。サンプル MIDI の構造から MIDI 出力プロファイルを定義 |
 | v0.4 | 2026-10-10 | MIDI の時間の基準（曲頭基準）と PPQ（resolution と同じ値）を決定。未決事項なし |
 | v0.5 | 2026-10-10 | 完成品の例の分析結果を §4.1 に追加（全長ステム、BGM 列、resolution の保持、拡張子の探索） |
+| v0.6 | 2026-10-10 | M2 完了。音切りの既定値と測定結果（§6.3）、アタック欠けの警告を 10 ms に変更、FFT を自前実装に、CLI を実装に合わせて更新（§9） |
 
 ---
 
@@ -125,20 +126,46 @@ bmson の仕様から、ツールの設計を決める性質を整理する。
 
 ### 6.3 音切り（Slicer）
 
-**自動検出**
+**自動検出**（M2 で実装済み）
 - オンセット検出関数: スペクトルフラックス（既定）、エネルギー（RMS 差分）、HFC から選ぶ
-- ピーク抽出: 移動中央値＋オフセットの適応閾値
-- パラメータ:
-  - 感度（0〜1。閾値のオフセットに対応する）
-  - 最小間隔（ms。連打の誤検出を防ぐ）
-  - 無音ゲート（dBFS。これ未満の区間では検出しない）
-  - プリロール（ms。切断点を立ち上がりより少し前に置く。既定 0）
-- パラメータを変えるとリアルタイムで再検出し、波形の上に結果を表示する。手動で編集した切断点は再検出しても消さない。
+- 分析: フレーム 1024 サンプル、ホップ 256 サンプル、Hann 窓
+- ピーク抽出: 前後 100 ms の移動中央値＋オフセットの適応閾値、±2 フレームの極大
+- 位置の補正: 音量が 3 dB 以上上がる箇所では、16 サンプル単位でアタックの開始（立ち上がりの 20%）まで戻す。音量がほぼ変わらない箇所（レガートで音程だけ変わるなど）は、スペクトルが変わったフレームの位置を使う
+- パラメータと既定値:
+
+| パラメータ | 既定 | 意味 |
+|---|---|---|
+| 感度 | 0.5 | 0〜1。高いほど多く切る |
+| 最小間隔 | 30 ms | これより近い立ち上がりは強い方だけ残す |
+| 無音ゲート | -60 dBFS | これより静かな区間では検出しない |
+| プリロール | 0 ms | 切断点を立ち上がりより手前に置く |
+
+- パラメータを変えるとリアルタイムで再検出し、波形の上に結果を表示する（GUI は M3）。
+- 再検出では、自動検出の切断点のうちレーン未割当のものだけを置き換える。手動の切断点と、レーンを割り当てた切断点は残す。
+
+**完成品の例での測定結果**（v0.6、`tools/evaluate_slicing.py`）
+
+完成品の例（Isolated [Normal]）の 8 ステムについて、既定の設定で検出・クオンタイズした切断点と、作者が実際に置いた切断点を ±15 ms で照合した。作者の切断点は「正解」ではなく採用例なので、一致率は目安として扱う。
+
+| ステム | 一致率 (F) | 備考 |
+|---|---|---|
+| Kick / hihat / Snare | 1.00 / 1.00 / 0.96 | 打楽器はほぼそのまま使える |
+| gLead / sLead | 0.93 / 0.94 | |
+| bsBass | 0.89 | |
+| voc1 | 0.74 | ボーカルは子音の位置で作者の判断が分かれる |
+| upBass | 0.50（感度 0.7 で 0.70） | 音の切れ目が弱いベースは感度を上げる前提 |
+| 全体 | 0.86 | |
+
+- クオンタイズなし（グリッド 0）では全体 0.76 に下がる。作者の切断点がグリッド上にあるため、クオンタイズが一致率に大きく効く
+- エネルギー関数は音程のある素材で大きく下がる（全体 0.51）。打楽器専用の選択肢として残す
 
 **クオンタイズ**
 - グリッド: 4, 8, 12, 16, 24, 32, 48, 64分 と任意の分割
 - 強さ: 0〜100%、または「許容幅 ±n ms 以内のものだけスナップ」
-- **アタック欠けの警告**: スナップ先が検出した立ち上がりより後ろにずれると、アタックが前のスライスに入ってしまう。後ろ方向のずれが閾値（既定 3ms）を超えた切断点は赤く表示する。
+- グリッドは小節線ごとに数え直す（変拍子の小節の後でもずれない）。最後の小節線より後ろは、最後の小節の長さで続ける
+- 寄せない切断点は、立ち上がりより後ろにならないよう pulse を切り捨てる
+- **アタック欠けの警告 (V09)**: スナップ先が検出した立ち上がりより後ろにずれると、アタックが前のスライスに入ってしまう。後ろ方向のずれが閾値（既定 10 ms）を超えた切断点は赤く表示する
+  - 当初は 3 ms としていたが、完成品の例では作者が採用した切断点の多くが 3〜7 ms に入り、警告が多すぎたため 10 ms にした
 
 **手動編集**
 - 追加（クリック）、削除、移動（ドラッグ。グリッドスナップは Shift で ON/OFF）、範囲選択して一括削除・一括クオンタイズ
@@ -282,8 +309,8 @@ BmsONE への不満を受けた中心機能。
 | GUI | Qt 6 Widgets（波形と譜面は自前で描画する QWidget） | 大量のノーツでも、描画範囲だけ描けば速い。QGraphicsView は要素数が多いと重い |
 | ビルド | CMake | Core / CLI / GUI を別ターゲットに分けやすい |
 | JSON | nlohmann/json (MIT) | Core を Qt に依存させないため |
-| 音声デコード・再生 | miniaudio (Public Domain / MIT-0) | 低遅延のミキシング再生、wav/flac のデコード。ogg は stb_vorbis |
-| FFT | pocketfft (BSD) | ヘッダのみで軽い。aubio は GPL なので避ける |
+| 音声デコード・再生 | miniaudio 0.11.21 (Public Domain / MIT-0) | wav/flac/mp3 のデコード（M2）、低遅延の再生（M3）。ogg は stb_vorbis (Public Domain / MIT) |
+| FFT | 自前の基数 2 FFT | 1024 点程度なら十分速く、core を標準 C++ だけに保てるため。aubio は GPL なので避ける |
 | テスト | GoogleTest (BSD) | Core のテストを Qt なしで回せる |
 | CLI 引数解析 | CLI11 (BSD-3-Clause) | ヘッダのみ。サブコマンドとヘルプ生成が揃っている |
 
@@ -363,15 +390,26 @@ Project
 
 MVP では `beat-7k.json` だけを同梱する。任意の譜面フォーマットに対応するときは、出力側の `ChartExporter` ポートを追加する。
 
-## 9. CLI 設計（将来実装。Core API はこの形で作る）
+## 9. CLI 設計
+
+実装済みのコマンド（M2 時点）。GUI でできる操作は、順次 CLI からも呼べるようにする。
 
 ```
-igusa slice   <wav> --bpm 175 [--sensitivity 0.6] [--min-interval 30] [--grid 16] [--out cuts.json]
-igusa build   <project.ibs.json> --out song.bmson
-igusa midi    <song.bmson> --out cuts.mid [--pitch 60] [--ppq 480] [--tempo-only]
-igusa validate <song.bmson> [--json]
-igusa info    <song.bmson> [--json]
-igusa preview <song.bmson> --measure 12
+igusa-cli info     <song.bmson> [--json]
+igusa-cli validate <song.bmson> [--json]
+igusa-cli convert  <in.bmson> <out.bmson> [--check]
+igusa-cli slice    <audio> [--chart song.bmson | --bpm 120 --resolution 240] [--start 0]
+                   [--function flux|energy|hfc] [--sensitivity 0.5] [--min-interval 30] [--gate -60] [--preroll 0]
+                   [--grid 16] [--strength 1] [--window 20] [--attack-warning 10] [--bmson out.bmson] [--json]
+igusa-cli midi     <song.bmson> -o <out.mid|folder> [--profile punai-punai-ensou|generic] [--ppq N]
+                   [--origin song|placement] [--tempo-only] [--json]
+```
+
+今後追加する予定のコマンド:
+
+```
+igusa-cli build    <project.ibs.json> --out song.bmson
+igusa-cli preview  <song.bmson> --measure 12
 ```
 
 - `--json` で、結果を標準出力に JSON で返す（他のツールから扱いやすくするため）
@@ -448,7 +486,7 @@ tests/
 |---|---|---|
 | M0 ✅ | リポジトリ、CMake 構成、CI（GitHub Actions / Windows）、コーディング規約 | 空のターゲットがビルドでき、テストが回る |
 | M1 ✅ | core: ドメインモデル、TimingMap、bmson 入出力、検証 | 既存の bmson を読み込み、書き出して一致する（完成品の例 6 譜面で確認済み） |
-| M2 | Slicer: デコード、オンセット検出、クオンタイズ、MIDI 出力（core＋CLI の `slice` / `midi`） | フィクスチャで検出精度のテストに通る |
+| M2 ✅ | Slicer: デコード、オンセット検出、クオンタイズ、MIDI 出力（core＋CLI の `slice` / `midi`） | フィクスチャで検出精度のテストに通る（合成音源のテストに加え、完成品の例で一致率 0.86） |
 | M3 | GUI: アレンジャー、波形ビュー、切断点編集、スライス試聴 | フレーズを配置して音切りができる |
 | M4 | GUI: 譜面エディタ（割当モード、LN、BPM/STOP、小節線、Undo） | 1曲分の 7key 譜面が作れる |
 | M5 | Pulsus プレビュー、BGA/BGI、メタ情報、サイドカー | 提出できる bmson 一式が出力できる |
