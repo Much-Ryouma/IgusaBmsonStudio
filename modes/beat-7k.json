@@ -1,0 +1,15 @@
+{
+  "mode_hint": "beat-7k",
+  "display_name": "7KEYS",
+  "lanes": [
+    { "x": 8, "label": "SC", "kind": "scratch", "width": 2.0 },
+    { "x": 1, "label": "1",  "kind": "white",   "width": 1.0 },
+    { "x": 2, "label": "2",  "kind": "black",   "width": 0.8 },
+    { "x": 3, "label": "3",  "kind": "white",   "width": 1.0 },
+    { "x": 4, "label": "4",  "kind": "black",   "width": 0.8 },
+    { "x": 5, "label": "5",  "kind": "white",   "width": 1.0 },
+    { "x": 6, "label": "6",  "kind": "black",   "width": 0.8 },
+    { "x": 7, "label": "7",  "kind": "white",   "width": 1.0 }
+  ],
+  "bgm_column_start_x": 9
+}

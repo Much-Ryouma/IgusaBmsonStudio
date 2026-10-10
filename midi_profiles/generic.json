@@ -1,0 +1,17 @@
+{
+  "id": "generic",
+  "display_name": "汎用",
+  "smf_format": 1,
+  "ppq": "resolution",
+  "conductor_track": true,
+  "tempo_in_every_track": false,
+  "time_signature": true,
+  "stop_as_marker": true,
+  "track_per": "asset",
+  "track_name": "asset_basename",
+  "channel": 1,
+  "note_number": 60,
+  "velocity": 100,
+  "note_length": "until_next_cut",
+  "time_origin": "song_start"
+}

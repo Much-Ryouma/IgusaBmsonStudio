@@ -1,0 +1,10 @@
+#pragma once
+
+#include <string_view>
+
+namespace ibs::core {
+
+inline constexpr std::string_view kApplicationName = "@PROJECT_NAME@";
+inline constexpr std::string_view kVersion = "@PROJECT_VERSION@";
+
+}  // namespace ibs::core

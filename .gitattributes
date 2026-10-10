@@ -1,0 +1,9 @@
+* text=auto
+*.sh text eol=lf
+*.wav binary
+*.ogg binary
+*.flac binary
+*.mid binary
+*.png binary
+*.mp4 binary
+*.webm binary

@@ -1,0 +1,17 @@
+# Build outputs
+/build/
+/out/
+CMakeUserPresets.json
+compile_commands.json
+
+# IDE
+.vs/
+.vscode/
+.idea/
+*.user
+
+# User's own works used only as local references (must not be published)
+/appendix/
+
+# Preview temp files written next to charts
+.~preview_*.bmson
