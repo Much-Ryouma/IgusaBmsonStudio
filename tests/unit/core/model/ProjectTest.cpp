@@ -107,5 +107,73 @@ TEST(Project, PRJ011_RemovesOnlyUnassignedNonHeadCutPoints) {
     EXPECT_EQ(project.cutPoints().size(), 2u);
 }
 
+TEST(Project, PRJ012_MovedCutPointKeepsItsNotesAndBecomesManual) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("bass.wav"), 960, 0);
+    const CutPointId cut = project.addCutPoint(placement, 240, CutOrigin::Auto);
+    const NoteId note = project.addNote(cut, 3, 0);
+
+    project.moveCutPoint(cut, 300);
+
+    EXPECT_EQ(project.absolutePulseOf(project.cutPoint(cut)), 1260);
+    EXPECT_EQ(project.cutPoint(cut).origin, CutOrigin::Manual);
+    ASSERT_EQ(project.notes().size(), 1u);
+    EXPECT_EQ(project.notes().front().id, note);
+    EXPECT_EQ(project.notes().front().cutPointId, cut);
+}
+
+TEST(Project, PRJ013_RejectsInvalidCutPointMoves) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("bass.wav"), 0, 0);
+    const CutPointId first = project.addCutPoint(placement, 240, CutOrigin::Manual);
+    project.addCutPoint(placement, 480, CutOrigin::Manual);
+
+    EXPECT_THROW(project.moveCutPoint(project.headCutPointOf(placement), 120), std::invalid_argument);
+    EXPECT_THROW(project.moveCutPoint(first, 0), std::invalid_argument);
+    EXPECT_THROW(project.moveCutPoint(first, 480), std::invalid_argument);
+    EXPECT_EQ(project.cutPoint(first).offsetPulses, 240);
+}
+
+TEST(Project, PRJ014_MovingPlacementMovesAllItsCutPoints) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("bass.wav"), 0, 0);
+    const CutPointId cut = project.addCutPoint(placement, 240, CutOrigin::Manual);
+
+    project.movePlacement(placement, 1920);
+
+    EXPECT_EQ(project.absolutePulseOf(project.cutPoint(project.headCutPointOf(placement))), 1920);
+    EXPECT_EQ(project.absolutePulseOf(project.cutPoint(cut)), 2160);
+    EXPECT_THROW(project.movePlacement(placement, -1), std::invalid_argument);
+}
+
+TEST(Project, PRJ015_RemovingPlacementRemovesItsCutPointsAndNotesOnly) {
+    Project project;
+    const AssetId asset = project.addAsset("bass.wav");
+    const PlacementId removed = project.addPlacement(asset, 0, 0);
+    project.addNote(project.addCutPoint(removed, 240, CutOrigin::Manual), 1, 0);
+    const PlacementId kept = project.addPlacement(asset, 1920, 0);
+    const NoteId keptNote = project.addNote(project.addCutPoint(kept, 240, CutOrigin::Manual), 2, 0);
+
+    project.removePlacement(removed);
+
+    ASSERT_EQ(project.placements().size(), 1u);
+    EXPECT_EQ(project.placements().front().id, kept);
+    EXPECT_EQ(project.cutPoints().size(), 2u);
+    ASSERT_EQ(project.notes().size(), 1u);
+    EXPECT_EQ(project.notes().front().id, keptNote);
+    EXPECT_EQ(project.assets().size(), 1u);
+}
+
+TEST(Project, PRJ016_ListsCutPointsOfPlacementInTimeOrder) {
+    Project project;
+    const PlacementId placement = project.addPlacement(project.addAsset("bass.wav"), 0, 0);
+    const CutPointId late = project.addCutPoint(placement, 720, CutOrigin::Manual);
+    const CutPointId early = project.addCutPoint(placement, 240, CutOrigin::Manual);
+    project.addPlacement(project.addAsset("lead.wav"), 0, 0);
+
+    const std::vector<CutPointId> expected{project.headCutPointOf(placement), early, late};
+    EXPECT_EQ(project.cutPointsOf(placement), expected);
+}
+
 }  // namespace
 }  // namespace ibs::core

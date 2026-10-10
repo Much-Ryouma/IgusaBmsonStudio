@@ -1,7 +1,7 @@
 # 音声の読み込み (infra/audio) と音切りのユースケース (app)
 
-- 対象: `ibs::infra::decodeAudioFile` / `ibs::app::SlicingService`
-- テストコード: `tests/unit/infra/audio/AudioFileDecoderTest.cpp`、`tests/unit/app/SlicingServiceTest.cpp`
+- 対象: `ibs::infra::decodeAudioFile` / `ibs::infra::MiniaudioOutput` / `ibs::app::SlicingService`
+- テストコード: `tests/unit/infra/audio/AudioFileDecoderTest.cpp`、`tests/unit/infra/audio/MiniaudioOutputTest.cpp`、`tests/unit/app/SlicingServiceTest.cpp`
 - 根拠: SPEC.md §6.2（素材の取り込み）、§6.3（音切り）
 
 ## 何を保証するか
@@ -19,6 +19,15 @@ GUI と CLI が共通で使う「配置を音切りする」操作が、素材�
 | DEC-002 | 日本語のフォルダ名・ファイル名の wav | 読み込む | 読み込める |
 | DEC-003 | 存在しないファイル | 読み込む | `AudioDecodeError` |
 | DEC-004 | 中身がテキストのファイル（拡張子 .wav） | 読み込む | `AudioDecodeError` |
+
+## 音声の出力 (OUT)
+
+CI のマシンには音声デバイスがないことがあるため、「鳴ること」ではなく「鳴らせないときに理由を返して落ちないこと」を確かめる。実際に鳴るかは GUI の手動チェックリスト（`tests/specs/gui/manual_checklist.md`）で確認する。
+
+| ID | 前提 | 操作 | 期待結果 |
+|---|---|---|---|
+| OUT-001 | 48 kHz を希望 | デバイスを開く前のサンプルレート / 1 秒の無音を再生 → 停止 | 48000 / 開始できたら再生中 → 停止後は再生中でない。開始できなければ理由が入り、再生中でない |
+| OUT-002 | 48 kHz を希望 | モノラルの音を渡す | 開始しない |
 
 ## 音切りのユースケース (SLC)
 

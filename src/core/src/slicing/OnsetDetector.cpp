@@ -65,20 +65,37 @@ double frameRmsDb(const std::vector<float>& mono, std::size_t start, std::size_t
     return 10.0 * std::log10(sum / static_cast<double>(size) + kEnergyFloor);
 }
 
-std::vector<double> magnitudeSpectrum(const std::vector<float>& mono, std::size_t start,
-                                      const std::vector<double>& window) {
-    std::vector<std::complex<double>> spectrum(window.size());
-    for (std::size_t offset = 0; offset < window.size(); ++offset) {
-        spectrum[offset] = sampleAt(mono, start + offset) * window[offset];
+class SpectrumAnalyzer {
+public:
+    explicit SpectrumAnalyzer(int frameSize)
+        : plan_(static_cast<std::size_t>(frameSize)),
+          window_(hannWindow(frameSize)),
+          frame_(static_cast<std::size_t>(frameSize)),
+          magnitudes_(static_cast<std::size_t>(frameSize) / 2 + 1) {}
+
+    // Why not フレームごとに配列を確保する: 数分のステムでは数万フレームになり、確保と解放だけで解析時間が目に見えて延びるため使い回す
+    const std::vector<double>& magnitudes(const std::vector<float>& mono, std::size_t start) {
+        for (std::size_t offset = 0; offset < window_.size(); ++offset) {
+            frame_[offset] = sampleAt(mono, start + offset) * window_[offset];
+        }
+        plan_.transform(frame_, buffer_);
+        const double scale = 2.0 / static_cast<double>(window_.size());
+        // Why not std::abs を使う: 桁あふれ対策の hypot になり遅いが、窓掛け後の振幅は 1 程度で桁あふれしないため
+        for (std::size_t bin = 0; bin < magnitudes_.size(); ++bin) {
+            const double re = buffer_[bin].real();
+            const double im = buffer_[bin].imag();
+            magnitudes_[bin] = std::sqrt(re * re + im * im) * scale;
+        }
+        return magnitudes_;
     }
-    fftInPlace(spectrum);
-    std::vector<double> magnitudes(window.size() / 2 + 1);
-    const double scale = 2.0 / static_cast<double>(window.size());
-    for (std::size_t bin = 0; bin < magnitudes.size(); ++bin) {
-        magnitudes[bin] = std::abs(spectrum[bin]) * scale;
-    }
-    return magnitudes;
-}
+
+private:
+    RealFftPlan plan_;
+    std::vector<double> window_;
+    std::vector<double> frame_;
+    std::vector<std::complex<double>> buffer_;
+    std::vector<double> magnitudes_;
+};
 
 double positiveDifferenceSum(const std::vector<double>& current, const std::vector<double>& previous) {
     double sum = 0.0;
@@ -161,8 +178,8 @@ SampleIndex spectralChangePosition(std::size_t frame, const OnsetParameters& par
 }
 
 struct Envelopes {
-    std::vector<double> attack;
-    std::vector<double> level;
+    const std::vector<double>& attack;
+    const std::vector<double>& level;
 };
 
 bool hasLevelJump(const std::vector<double>& level, std::size_t begin, std::size_t end) {
@@ -233,17 +250,18 @@ std::vector<double> onsetStrengthEnvelope(const std::vector<float>& mono, const 
             previous = current;
         }
     } else {
-        const auto window = hannWindow(parameters.frameSize);
+        SpectrumAnalyzer analyzer(parameters.frameSize);
         std::vector<double> previous(frameSize / 2 + 1, 0.0);
+        std::vector<double> compressed(frameSize / 2 + 1, 0.0);
         double previousHfc = 0.0;
         for (std::size_t frame = 0; frame < frames; ++frame) {
-            auto magnitudes = magnitudeSpectrum(mono, frame * hop, window);
+            const auto& magnitudes = analyzer.magnitudes(mono, frame * hop);
             if (parameters.function == OnsetFunction::SpectralFlux) {
-                for (auto& magnitude : magnitudes) {
-                    magnitude = std::log1p(kLogCompression * magnitude);
+                for (std::size_t bin = 0; bin < magnitudes.size(); ++bin) {
+                    compressed[bin] = std::log1p(kLogCompression * magnitudes[bin]);
                 }
-                envelope[frame] = positiveDifferenceSum(magnitudes, previous);
-                previous = std::move(magnitudes);
+                envelope[frame] = positiveDifferenceSum(compressed, previous);
+                std::swap(previous, compressed);
             } else {
                 const double hfc = highFrequencyContent(magnitudes);
                 envelope[frame] = std::max(0.0, hfc - previousHfc);
@@ -255,13 +273,36 @@ std::vector<double> onsetStrengthEnvelope(const std::vector<float>& mono, const 
     return envelope;
 }
 
-std::vector<Onset> detectOnsets(const std::vector<float>& mono, int sampleRate, const OnsetParameters& parameters) {
+OnsetAnalysis analyzeOnsets(const std::vector<float>& mono, int sampleRate, const OnsetParameters& parameters) {
     if (sampleRate <= 0) {
         throw std::invalid_argument("sampleRate must be positive");
     }
-    const auto envelope = onsetStrengthEnvelope(mono, parameters);
-    const auto levels = frameRmsDbs(mono, parameters);
-    const Envelopes envelopes{blockEnvelope(mono, kEnvelopeWindowBlocks), blockEnvelope(mono, kLevelWindowBlocks)};
+    OnsetAnalysis analysis;
+    analysis.sampleRate = sampleRate;
+    analysis.function = parameters.function;
+    analysis.frameSize = parameters.frameSize;
+    analysis.hopSize = parameters.hopSize;
+    analysis.strength = onsetStrengthEnvelope(mono, parameters);
+    analysis.frameLevelsDb = frameRmsDbs(mono, parameters);
+    analysis.attackEnvelope = blockEnvelope(mono, kEnvelopeWindowBlocks);
+    analysis.levelEnvelope = blockEnvelope(mono, kLevelWindowBlocks);
+    return analysis;
+}
+
+bool analysisMatches(const OnsetAnalysis& analysis, const OnsetParameters& parameters) noexcept {
+    return analysis.function == parameters.function && analysis.frameSize == parameters.frameSize &&
+           analysis.hopSize == parameters.hopSize;
+}
+
+std::vector<Onset> pickOnsets(const OnsetAnalysis& analysis, const OnsetParameters& parameters) {
+    requireValid(parameters);
+    if (!analysisMatches(analysis, parameters)) {
+        throw std::invalid_argument("analysis was made with a different function, frame size or hop size");
+    }
+    const auto& envelope = analysis.strength;
+    const auto& levels = analysis.frameLevelsDb;
+    const Envelopes envelopes{analysis.attackEnvelope, analysis.levelEnvelope};
+    const int sampleRate = analysis.sampleRate;
 
     const double hopSeconds = static_cast<double>(parameters.hopSize) / sampleRate;
     const auto medianRadius = static_cast<std::size_t>(std::max(1.0, std::round(kMedianWindowSeconds / hopSeconds)));
@@ -293,6 +334,10 @@ std::vector<Onset> detectOnsets(const std::vector<float>& mono, int sampleRate, 
     std::sort(onsets.begin(), onsets.end(), [](const Onset& a, const Onset& b) { return a.sample < b.sample; });
     const auto minimumGap = static_cast<SampleIndex>(std::llround(parameters.minimumIntervalMs * sampleRate / 1000.0));
     return enforceMinimumInterval(std::move(onsets), minimumGap);
+}
+
+std::vector<Onset> detectOnsets(const std::vector<float>& mono, int sampleRate, const OnsetParameters& parameters) {
+    return pickOnsets(analyzeOnsets(mono, sampleRate, parameters), parameters);
 }
 
 }  // namespace ibs::core

@@ -52,6 +52,9 @@ public:
     CutPointId addCutPoint(PlacementId placementId, Pulse offsetPulses, CutOrigin origin);
     NoteId addNote(CutPointId cutPointId, int lane, Pulse lengthPulses);
     void removeCutPoint(CutPointId cutPointId);
+    void moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses);
+    void movePlacement(PlacementId placementId, Pulse newStartPulse);
+    void removePlacement(PlacementId placementId);
 
     [[nodiscard]] bool hasNotes(CutPointId cutPointId) const;
 
@@ -66,6 +69,7 @@ public:
     [[nodiscard]] const Asset* findAssetByName(const std::string& name) const;
 
     [[nodiscard]] CutPointId headCutPointOf(PlacementId placementId) const;
+    [[nodiscard]] std::vector<CutPointId> cutPointsOf(PlacementId placementId) const;
     [[nodiscard]] Pulse absolutePulseOf(const CutPoint& cutPoint) const;
 
 private:

@@ -23,6 +23,24 @@ struct Onset {
     double strength = 0.0;
 };
 
+struct OnsetAnalysis {
+    int sampleRate = 0;
+    OnsetFunction function = OnsetFunction::SpectralFlux;
+    int frameSize = 0;
+    int hopSize = 0;
+    std::vector<double> strength;
+    std::vector<double> frameLevelsDb;
+    std::vector<double> attackEnvelope;
+    std::vector<double> levelEnvelope;
+};
+
+[[nodiscard]] OnsetAnalysis analyzeOnsets(const std::vector<float>& mono, int sampleRate,
+                                          const OnsetParameters& parameters);
+
+[[nodiscard]] bool analysisMatches(const OnsetAnalysis& analysis, const OnsetParameters& parameters) noexcept;
+
+[[nodiscard]] std::vector<Onset> pickOnsets(const OnsetAnalysis& analysis, const OnsetParameters& parameters);
+
 [[nodiscard]] std::vector<double> onsetStrengthEnvelope(const std::vector<float>& mono, const OnsetParameters& parameters);
 
 [[nodiscard]] std::vector<Onset> detectOnsets(const std::vector<float>& mono, int sampleRate,

@@ -124,5 +124,35 @@ TEST(OnsetDetector, ONS008_RejectsInvalidParameters) {
     EXPECT_THROW(static_cast<void>(detectOnsets(signal, kTestSampleRate, badFrame)), std::invalid_argument);
 }
 
+TEST(OnsetDetector, ONS009_PickingFromOneAnalysisEqualsFullDetection) {
+    std::vector<float> signal(samplesAt(2.2), 0.0f);
+    const double amplitudes[] = {0.5, 0.05, 0.3, 0.02, 0.4, 0.1};
+    for (int hit = 0; hit < 6; ++hit) {
+        addNoiseBurst(signal, samplesAt(0.2 + 0.3 * hit), amplitudes[hit], 40.0, static_cast<std::uint32_t>(hit + 7));
+    }
+    addBackgroundNoise(signal, 0.002);
+    OnsetParameters parameters;
+    const OnsetAnalysis analysis = analyzeOnsets(signal, kTestSampleRate, parameters);
+
+    for (const double sensitivity : {0.2, 0.5, 0.9}) {
+        parameters.sensitivity = sensitivity;
+        parameters.minimumIntervalMs = 60.0 * sensitivity;
+        parameters.prerollMs = 2.0;
+        EXPECT_EQ(positionsOf(pickOnsets(analysis, parameters)),
+                  positionsOf(detectOnsets(signal, kTestSampleRate, parameters)))
+            << "sensitivity " << sensitivity;
+    }
+}
+
+TEST(OnsetDetector, ONS010_RejectsPickingWithMismatchedAnalysis) {
+    const std::vector<float> signal(samplesAt(0.5), 0.0f);
+    OnsetParameters parameters;
+    const OnsetAnalysis analysis = analyzeOnsets(signal, kTestSampleRate, parameters);
+
+    parameters.function = OnsetFunction::Energy;
+    EXPECT_FALSE(analysisMatches(analysis, parameters));
+    EXPECT_THROW(static_cast<void>(pickOnsets(analysis, parameters)), std::invalid_argument);
+}
+
 }  // namespace
 }  // namespace ibs::core

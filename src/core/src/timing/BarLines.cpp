@@ -2,6 +2,8 @@
 
 #include <algorithm>
 #include <array>
+#include <cmath>
+#include <stdexcept>
 
 namespace ibs::core {
 
@@ -17,6 +19,44 @@ std::vector<Pulse> barStartsOf(const TimingData& timing) {
     std::sort(starts.begin(), starts.end());
     starts.erase(std::unique(starts.begin(), starts.end()), starts.end());
     return starts;
+}
+
+std::vector<GridLine> gridLinesBetween(const TimingData& timing, int divisionsPerWholeNote, Pulse from, Pulse to) {
+    if (divisionsPerWholeNote <= 0) {
+        throw std::invalid_argument("divisionsPerWholeNote must be positive");
+    }
+    const auto starts = barStartsOf(timing);
+    const Pulse quarter = std::max(1, timing.resolution);
+    const Pulse lastLength = starts.size() >= 2 ? starts.back() - starts[starts.size() - 2] : quarter * 4;
+    const double step = static_cast<double>(quarter) * 4.0 / divisionsPerWholeNote;
+
+    std::vector<GridLine> lines;
+    Pulse barStart = 0;
+    for (int bar = 0; barStart <= to; ++bar) {
+        const auto index = static_cast<std::size_t>(bar);
+        const Pulse barEnd = index + 1 < starts.size() ? starts[index + 1]
+                                                       : (index < starts.size() ? starts[index] : barStart) + lastLength;
+        if (index < starts.size()) {
+            barStart = starts[index];
+        }
+        if (barEnd > from) {
+            for (int division = 0;; ++division) {
+                const Pulse pulse = barStart + static_cast<Pulse>(std::llround(division * step));
+                if (pulse >= barEnd || pulse > to) {
+                    break;
+                }
+                if (pulse < from) {
+                    continue;
+                }
+                const GridLineKind kind = division == 0                     ? GridLineKind::Bar
+                                          : (pulse - barStart) % quarter == 0 ? GridLineKind::Beat
+                                                                             : GridLineKind::Subdivision;
+                lines.push_back(GridLine{pulse, kind, bar});
+            }
+        }
+        barStart = barEnd;
+    }
+    return lines;
 }
 
 std::optional<TimeSignature> timeSignatureForBarLength(Pulse barLengthPulses, int resolution) {

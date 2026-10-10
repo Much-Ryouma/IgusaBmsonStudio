@@ -1,6 +1,6 @@
 # 音切り (core/audio, core/slicing, core/timing)
 
-- 対象: `mixToMono` / `fftInPlace` / `detectOnsets` / `BeatGrid` / `planCuts` / `applyCutPlan` / `timeSignatureForBarLength`
+- 対象: `mixToMono` / `fftInPlace` / `RealFftPlan` / `analyzeOnsets` / `pickOnsets` / `detectOnsets` / `WaveformPyramid` / `BeatGrid` / `planCuts` / `applyCutPlan` / `timeSignatureForBarLength` / `gridLinesBetween`
 - テストコード: `tests/unit/core/audio/AudioBufferTest.cpp`、`tests/unit/core/slicing/*Test.cpp`、`tests/unit/core/timing/BarLinesTest.cpp`
 - 根拠: SPEC.md §6.3（音切り）、§4.1（完成品の例）
 - テスト用の音声は、すべてテストコードの中で合成する（`tests/unit/support/SyntheticAudio.hpp`）
@@ -25,6 +25,8 @@
 | FFT-001 | 先頭だけ 1 のインパルス（8 点） | FFT する | 全ビンの大きさが 1 |
 | FFT-002 | 64 点の中にちょうど 4 周期の正弦波 | FFT する | ビン 4 と 60 に最大値 |
 | FFT-003 | 長さ 6 | FFT する | `std::invalid_argument` |
+| FFT-004 | 4 / 8 / 1024 点の実数信号 | 実数用 FFT（`RealFftPlan`）と複素 FFT で変換 | 0〜N/2 のビンが 1e-9 以内で一致（実数用は半分の長さの FFT で済み、解析が速い） |
+| FFT-005 | 長さ 2、長さ 12、長さ 8 の計画に長さ 4 の入力 | 実数用 FFT を作る・変換する | すべて `std::invalid_argument` |
 
 ## 立ち上がりの検出 (ONS)
 
@@ -38,6 +40,16 @@
 | ONS-006 | -70 dBFS 程度の小さなノイズ 4 発 | 無音ゲート -60 dB で検出 | 0 個 |
 | ONS-007 | ノイズ 1 発 | プリロール 5 ms で検出 | プリロールなしより 5 ms（±0.5 ms）手前 |
 | ONS-008 | 感度 1.5、フレーム長 1000 | 検出 | `std::invalid_argument` |
+| ONS-009 | ONS-004 と同じ信号 | 1 回だけ解析し、感度・最小間隔・プリロールを変えて拾い直す | 毎回すべてを計算し直した結果と同じ位置（GUI でスライダーを動かすたびに解析し直さなくてよい） |
+| ONS-010 | スペクトルフラックスで解析した結果 | 関数をエネルギーに変えて拾い直す | 一致しないと判定し、`std::invalid_argument` |
+
+## 波形の縮小表示 (WAV)
+
+| ID | 前提 | 操作 | 期待結果 |
+|---|---|---|---|
+| WAV-001 | 4096 サンプルのランプ波と 1 か所のスパイク、最小の段 16 サンプル | 全体・中間・スパイク付近の範囲の最小・最大 | 生のサンプルから求めた最小・最大と一致（粗い段を使ってもスパイクを見落とさない） |
+| WAV-002 | WAV-001 と同じ、縮小率 4、4 段 | 段の構成 | 16 / … / 1024 サンプル、最も粗い段は 4 個 |
+| WAV-003 | 空の波形、範囲外、長さ 0 の範囲 | 最小・最大 | (0, 0) |
 
 ## グリッドとクオンタイズ (QNT, CUT)
 
@@ -60,4 +72,5 @@
 | BAR-001 | resolution 240、小節の長さ 960 / 720 / 840 / 1200 | 拍子を求める | 4/4、3/4、7/8、5/4 |
 | BAR-002 | 小節の長さ 1000（resolution 240） | 拍子を求める | 求められない（nullopt） |
 | BAR-003 | lines に y=0 がなく、960 と 1920 だけ | 小節の頭を求める | 0, 960, 1920 |
-| PRJ-011 | 先頭の切断点、ノーツのある切断点、ノーツのない切断点 | 削除する | 先頭とノーツのあるものは `std::invalid_argument`、ノーツのないものは消える |
+| BAR-004 | resolution 240、小節線 0, 960, 1800（2 小節目が 7/8） | 8 分グリッドの線を 600〜2400 で列挙 | 600, 720, …, 1680, 1800（7/8 の後で数え直す）, …, 2400。最後の小節線の後は同じ長さ（840）で続くので、次の小節頭は 2640。小節頭は Bar（小節番号付き）、4 分の位置は Beat、それ以外は Subdivision |
+| BAR-005 | resolution 240、小節線なし | 12 分（3 連）グリッドの線を 0〜959 で列挙 / 分割 0 | 12 本、80 pulse 間隔、240 は Beat / `std::invalid_argument` |

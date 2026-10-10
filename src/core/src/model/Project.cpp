@@ -87,6 +87,63 @@ void Project::removeCutPoint(CutPointId cutPointId) {
     std::erase_if(cutPoints_, [cutPointId](const CutPoint& existing) { return existing.id == cutPointId; });
 }
 
+void Project::moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
+    const CutPoint& target = cutPoint(cutPointId);
+    if (target.offsetPulses == 0) {
+        throw std::invalid_argument("the placement head cut point cannot be moved; move the placement instead");
+    }
+    if (newOffsetPulses <= 0) {
+        throw std::invalid_argument("cut point offset must be positive; offset 0 is the placement head");
+    }
+    const bool occupied = std::any_of(cutPoints_.begin(), cutPoints_.end(), [&](const CutPoint& existing) {
+        return existing.placementId == target.placementId && existing.offsetPulses == newOffsetPulses &&
+               existing.id != cutPointId;
+    });
+    if (occupied) {
+        throw std::invalid_argument("cut point already exists at offset " + std::to_string(newOffsetPulses));
+    }
+    auto& mutableTarget = *std::find_if(cutPoints_.begin(), cutPoints_.end(),
+                                        [cutPointId](const CutPoint& existing) { return existing.id == cutPointId; });
+    mutableTarget.offsetPulses = newOffsetPulses;
+    // Why not 自動検出の印のまま残す: 手で動かした切断点を再検出で消されないよう、手動の切断点として扱う
+    mutableTarget.origin = CutOrigin::Manual;
+}
+
+void Project::movePlacement(PlacementId placementId, Pulse newStartPulse) {
+    static_cast<void>(placement(placementId));
+    if (newStartPulse < 0) {
+        throw std::invalid_argument("placement start must not be negative");
+    }
+    auto& target = *std::find_if(placements_.begin(), placements_.end(),
+                                 [placementId](const Placement& existing) { return existing.id == placementId; });
+    target.startPulse = newStartPulse;
+}
+
+void Project::removePlacement(PlacementId placementId) {
+    static_cast<void>(placement(placementId));
+    const auto removedCutPoints = cutPointsOf(placementId);
+    std::erase_if(notes_, [&](const Note& note) {
+        return std::find(removedCutPoints.begin(), removedCutPoints.end(), note.cutPointId) != removedCutPoints.end();
+    });
+    std::erase_if(cutPoints_, [placementId](const CutPoint& existing) { return existing.placementId == placementId; });
+    std::erase_if(placements_, [placementId](const Placement& existing) { return existing.id == placementId; });
+}
+
+std::vector<CutPointId> Project::cutPointsOf(PlacementId placementId) const {
+    std::vector<std::pair<Pulse, CutPointId>> ordered;
+    for (const auto& cutPoint : cutPoints_) {
+        if (cutPoint.placementId == placementId) {
+            ordered.emplace_back(cutPoint.offsetPulses, cutPoint.id);
+        }
+    }
+    std::sort(ordered.begin(), ordered.end());
+    std::vector<CutPointId> ids;
+    for (const auto& [offset, id] : ordered) {
+        ids.push_back(id);
+    }
+    return ids;
+}
+
 bool Project::hasNotes(CutPointId cutPointId) const {
     return std::any_of(notes_.begin(), notes_.end(), [cutPointId](const Note& note) { return note.cutPointId == cutPointId; });
 }

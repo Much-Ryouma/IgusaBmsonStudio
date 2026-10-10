@@ -11,6 +11,7 @@ endif()
 
 add_library(ibs_infra STATIC
     src/audio/AudioFileDecoder.cpp
+    src/audio/MiniaudioOutput.cpp
     src/bmson/BmsonFileRepository.cpp
     src/bmson/BmsonJsonCodec.cpp
     src/fs/LocalFileSystem.cpp

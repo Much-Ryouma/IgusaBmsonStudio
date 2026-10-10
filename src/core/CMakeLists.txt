@@ -6,12 +6,14 @@ configure_file(
 add_library(ibs_core STATIC
     src/asset/AssetPath.cpp
     src/audio/AudioBuffer.cpp
+    src/audio/WaveformPyramid.cpp
     src/bmson/BmsonEquivalence.cpp
     src/bmson/BmsonExporter.cpp
     src/bmson/BmsonImporter.cpp
     src/midi/MidiExporter.cpp
     src/mode/KeyMode.cpp
     src/model/Project.cpp
+    src/playback/PlaybackRange.cpp
     src/slicing/CutPlanner.cpp
     src/slicing/Fft.cpp
     src/slicing/OnsetDetector.cpp
