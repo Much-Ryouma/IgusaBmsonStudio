@@ -18,6 +18,8 @@
 #include "ibs/app/ChartService.hpp"
 #include "ibs/app/EditorDocument.hpp"
 #include "ibs/app/PlaybackService.hpp"
+#include "ibs/app/PreviewService.hpp"
+#include "ibs/core/model/BgaEditing.hpp"
 #include "ibs/app/SlicingSession.hpp"
 #include "ibs/app/TimelineViewport.hpp"
 
@@ -29,6 +31,14 @@ struct StudioPorts {
     core::AudioOutputPort& output;
     app::AssetFileStore& assetFiles;
     core::KeyModeCatalog modes;
+    app::ProcessLauncher& launcher;
+};
+
+struct BgaEventRef {
+    core::BgaTrack track = core::BgaTrack::Bga;
+    core::Pulse y = 0;
+
+    friend bool operator==(const BgaEventRef&, const BgaEventRef&) = default;
 };
 
 struct NewProjectSettings {
@@ -52,6 +62,7 @@ public:
     [[nodiscard]] app::PlaybackService& playback() noexcept { return playback_; }
     [[nodiscard]] const app::MixSettings& mix() const noexcept { return mix_; }
     [[nodiscard]] const core::KeyMode* keyMode() const;
+    [[nodiscard]] std::vector<std::string> modeHints() const;
 
     void newProject(const NewProjectSettings& settings);
     bool open(const std::filesystem::path& path, QString* error);
@@ -71,6 +82,15 @@ public:
     core::PasteResult pasteAtCursor();
     [[nodiscard]] bool hasCopiedPattern() const noexcept { return !clipboard_.entries.empty(); }
     app::TimingEditOutcome editTiming(const QString& label, const std::function<void(core::TimingData&)>& edit);
+
+    [[nodiscard]] const app::PlayerSettings& playerSettings() const noexcept { return playerSettings_; }
+    void setPlayerSettings(app::PlayerSettings settings) { playerSettings_ = std::move(settings); }
+    app::PreviewOutcome previewInPlayer();
+
+    [[nodiscard]] std::optional<std::uint32_t> selectedBgaImage() const noexcept { return selectedBgaImage_; }
+    void selectBgaImage(std::optional<std::uint32_t> id);
+    [[nodiscard]] std::optional<BgaEventRef> selectedBgaEvent() const noexcept { return selectedBgaEvent_; }
+    void selectBgaEvent(std::optional<BgaEventRef> event);
 
     [[nodiscard]] int snapDivisions() const noexcept { return snapDivisions_; }
     void setSnapDivisions(int divisions);
@@ -129,6 +149,10 @@ private:
     app::SlicingSession slicing_;
     app::PlaybackService playback_;
     app::AssetImportService importer_;
+    app::PreviewService previewer_;
+    app::PlayerSettings playerSettings_;
+    std::optional<std::uint32_t> selectedBgaImage_;
+    std::optional<BgaEventRef> selectedBgaEvent_;
     app::MixSettings mix_;
     std::optional<core::PlacementId> selectedPlacement_;
     std::vector<core::CutPointId> selectedCuts_;

@@ -56,6 +56,7 @@ public:
     void removeCutPoint(CutPointId cutPointId);
     void moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses);
     void retimeCutPoint(CutPointId cutPointId, Pulse newOffsetPulses);
+    void setCutOrigin(CutPointId cutPointId, CutOrigin origin);
     void movePlacement(PlacementId placementId, Pulse newStartPulse);
     void removePlacement(PlacementId placementId);
     void removeNote(NoteId noteId);

@@ -15,10 +15,12 @@ add_library(ibs_infra STATIC
     src/bmson/BmsonFileRepository.cpp
     src/bmson/BmsonJsonCodec.cpp
     src/fs/LocalFileSystem.cpp
+    src/image/ImageSize.cpp
     src/fs/Utf8Path.cpp
     src/json/PrettyJsonWriter.cpp
     src/midi/StandardMidiFile.cpp
-    src/mode/KeyModeJsonLoader.cpp)
+    src/mode/KeyModeJsonLoader.cpp
+    src/sidecar/SidecarJsonCodec.cpp)
 add_library(ibs::infra ALIAS ibs_infra)
 
 target_include_directories(ibs_infra PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/include)

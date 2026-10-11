@@ -26,6 +26,8 @@ public:
 
     [[nodiscard]] SliceSettings settingsFor(core::PlacementId placementId) const;
     void setSettings(core::PlacementId placementId, const SliceSettings& settings);
+    [[nodiscard]] const std::map<core::PlacementId, SliceSettings>& allSettings() const noexcept { return settings_; }
+    void replaceAllSettings(std::map<core::PlacementId, SliceSettings> settings);
 
     [[nodiscard]] static SlicePreview previewWith(const core::Project& project, core::PlacementId placementId,
                                                   const core::OnsetAnalysis& analysis, const SliceSettings& settings);

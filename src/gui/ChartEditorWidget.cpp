@@ -19,6 +19,7 @@
 #include "QtText.hpp"
 #include "StudioPalette.hpp"
 #include "ibs/app/ArrangementCommands.hpp"
+#include "ibs/app/BgaCommands.hpp"
 #include "ibs/app/ChartCommands.hpp"
 #include "ibs/core/chart/ChartEditing.hpp"
 #include "ibs/core/timing/BarLines.hpp"
@@ -136,6 +137,11 @@ std::vector<ChartEditorWidget::Column> ChartEditorWidget::columns() const {
         }
         left += kGroupGap;
     }
+    for (const auto track : {core::BgaTrack::Bga, core::BgaTrack::Layer, core::BgaTrack::Poor}) {
+        result.push_back(Column{Column::Kind::Bga, static_cast<int>(track), {}, left, kBgaColumnWidth});
+        left += kBgaColumnWidth;
+    }
+    left += kGroupGap;
     for (const auto& asset : controller_.project().assets()) {
         result.push_back(Column{Column::Kind::Asset, 0, asset.id, left, kAssetColumnWidth});
         left += kAssetColumnWidth;
@@ -145,8 +151,32 @@ std::vector<ChartEditorWidget::Column> ChartEditorWidget::columns() const {
 
 std::optional<ChartEditorWidget::Column> ChartEditorWidget::laneColumn(int x) const {
     for (const auto& column : columns()) {
-        if (column.kind != Column::Kind::Asset && column.x == x) {
+        if ((column.kind == Column::Kind::Lane || column.kind == Column::Kind::BgmColumn) && column.x == x) {
             return column;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<ChartEditorWidget::Column> ChartEditorWidget::bgaColumn(core::BgaTrack track) const {
+    for (const auto& column : columns()) {
+        if (column.kind == Column::Kind::Bga && column.x == static_cast<int>(track)) {
+            return column;
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<BgaEventRef> ChartEditorWidget::bgaEventAt(QPointF point) const {
+    const auto column = columnAt(point.x());
+    if (!column || column->kind != Column::Kind::Bga) {
+        return std::nullopt;
+    }
+    const auto track = static_cast<core::BgaTrack>(column->x);
+    for (const auto& event : core::eventsOf(controller_.project().bga, track)) {
+        const double y = yOf(static_cast<double>(event.y));
+        if (point.y() >= y - 14.0 && point.y() <= y + 1.0) {
+            return BgaEventRef{track, event.y};
         }
     }
     return std::nullopt;
@@ -175,7 +205,7 @@ std::optional<ChartEditorWidget::Column> ChartEditorWidget::columnAt(double x) c
 
 std::optional<core::NoteId> ChartEditorWidget::noteAt(QPointF point, bool* onLengthHandle) const {
     const auto column = columnAt(point.x());
-    if (!column || column->kind == Column::Kind::Asset) {
+    if (!column || column->kind == Column::Kind::Asset || column->kind == Column::Kind::Bga) {
         return std::nullopt;
     }
     const auto& project = controller_.project();
@@ -228,6 +258,7 @@ void ChartEditorWidget::paintEvent(QPaintEvent*) {
     paintTiming(painter);
     paintCutMarks(painter, cols);
     paintNotes(painter, cols);
+    paintBga(painter, cols);
 
     const double cursorY = yOf(static_cast<double>(controller_.cursorPulse()));
     painter.setPen(QPen(palette::kCursor, 1.0));
@@ -259,6 +290,8 @@ void ChartEditorWidget::paintGrid(QPainter& painter, const std::vector<Column>& 
             background = laneBackground(kind);
         } else if (column.kind == Column::Kind::BgmColumn) {
             background = QColor(0x20, 0x24, 0x20);
+        } else if (column.kind == Column::Kind::Bga) {
+            background = QColor(0x24, 0x20, 0x28);
         } else {
             background = palette::kRowAlternate;
         }
@@ -356,7 +389,7 @@ void ChartEditorWidget::paintNotes(QPainter& painter, const std::vector<Column>&
     }
     for (const auto& note : project.notes()) {
         const auto column = std::find_if(cols.begin(), cols.end(), [&](const Column& candidate) {
-            return candidate.kind != Column::Kind::Asset && candidate.x == note.lane;
+            return (candidate.kind == Column::Kind::Lane || candidate.kind == Column::Kind::BgmColumn) && candidate.x == note.lane;
         });
         if (column == cols.end()) {
             continue;
@@ -368,7 +401,8 @@ void ChartEditorWidget::paintNotes(QPainter& painter, const std::vector<Column>&
         Column target = *column;
         core::Pulse length = note.lengthPulses;
         if (dragging && drag_.kind == DragKind::NoteLane) {
-            if (const auto hovered = columnAt(drag_.current.x()); hovered && hovered->kind != Column::Kind::Asset) {
+            if (const auto hovered = columnAt(drag_.current.x());
+                hovered && (hovered->kind == Column::Kind::Lane || hovered->kind == Column::Kind::BgmColumn)) {
                 target = *hovered;
             }
         } else if (dragging) {
@@ -395,6 +429,32 @@ void ChartEditorWidget::paintNotes(QPainter& painter, const std::vector<Column>&
         if (layers[{note.lane, y}] > 1) {
             painter.setPen(palette::kBackground);
             painter.drawText(rect, Qt::AlignCenter, QStringLiteral("%1").arg(layers[{note.lane, y}]));
+        }
+    }
+}
+
+void ChartEditorWidget::paintBga(QPainter& painter, const std::vector<Column>& cols) {
+    const auto& bga = controller_.project().bga;
+    const auto selected = controller_.selectedBgaEvent();
+    for (const auto& column : cols) {
+        if (column.kind != Column::Kind::Bga) {
+            continue;
+        }
+        const auto track = static_cast<core::BgaTrack>(column.x);
+        for (const auto& event : core::eventsOf(bga, track)) {
+            core::Pulse y = event.y;
+            if (drag_.kind == DragKind::BgaMove && drag_.moved && drag_.bga == BgaEventRef{track, event.y}) {
+                y = drag_.pulse;
+            }
+            const double bottom = yOf(static_cast<double>(y));
+            const QRectF box(column.left + 1, bottom - 14, column.width - 2, 14);
+            painter.fillRect(box, QColor(0x9b, 0x7c, 0xd9));
+            painter.setPen(palette::kBackground);
+            painter.drawText(box, Qt::AlignCenter, QString::number(event.id));
+            if (selected && *selected == BgaEventRef{track, event.y}) {
+                painter.setPen(QPen(palette::kSelection, 1.5));
+                painter.drawRect(box.adjusted(-1, -1, 1, 1));
+            }
         }
     }
 }
@@ -438,6 +498,9 @@ void ChartEditorWidget::paintHeader(QPainter& painter, const std::vector<Column>
             }
         } else if (column.kind == Column::Kind::BgmColumn) {
             label = QString::number(column.x);
+        } else if (column.kind == Column::Kind::Bga) {
+            static const QString kNames[] = {QStringLiteral("BGA"), QStringLiteral("LYR"), QStringLiteral("POOR")};
+            label = kNames[column.x];
         } else {
             label = toQString(controller_.project().asset(column.asset).name).left(2);
             painter.fillRect(QRectF(column.left, kHeaderHeight - 3, column.width, 3), palette::assetColor(column.asset));
@@ -472,6 +535,21 @@ void ChartEditorWidget::mousePressEvent(QMouseEvent* event) {
     drag_.origin = point;
     drag_.current = point;
 
+    if (const auto bgaEvent = bgaEventAt(point)) {
+        controller_.selectBgaEvent(bgaEvent);
+        drag_.kind = DragKind::BgaMove;
+        drag_.bga = *bgaEvent;
+        drag_.pulse = bgaEvent->y;
+        return;
+    }
+    if (columnAt(point.x()) && columnAt(point.x())->kind == Column::Kind::Bga) {
+        controller_.selectBgaEvent(std::nullopt);
+        controller_.setCursorPulse(controller_.snap(pulseAtY(point.y()), StudioController::snapModeFor(event->modifiers())));
+        return;
+    }
+    if (controller_.selectedBgaEvent()) {
+        controller_.selectBgaEvent(std::nullopt);
+    }
     bool onHandle = false;
     if (const auto note = noteAt(point, &onHandle)) {
         const auto& project = controller_.project();
@@ -517,7 +595,7 @@ void ChartEditorWidget::mouseMoveEvent(QMouseEvent* event) {
     drag_.current = event->position();
     const QPointF delta = drag_.current - drag_.origin;
     drag_.moved = drag_.moved || std::abs(delta.x()) + std::abs(delta.y()) >= kDragThresholdPixels;
-    if (drag_.kind == DragKind::NoteLength || drag_.kind == DragKind::CutMove) {
+    if (drag_.kind == DragKind::NoteLength || drag_.kind == DragKind::CutMove || drag_.kind == DragKind::BgaMove) {
         drag_.pulse = controller_.snap(pulseAtY(drag_.current.y()), StudioController::snapModeFor(event->modifiers()));
     }
     update();
@@ -531,7 +609,7 @@ void ChartEditorWidget::mouseReleaseEvent(QMouseEvent* event) {
             case DragKind::NoteLane:
                 if (finished.moved) {
                     const auto column = columnAt(finished.current.x());
-                    if (column && column->kind != Column::Kind::Asset) {
+                    if (column && (column->kind == Column::Kind::Lane || column->kind == Column::Kind::BgmColumn)) {
                         app::changeNoteLane(controller_.document(), finished.note, column->x);
                     }
                 }
@@ -546,6 +624,12 @@ void ChartEditorWidget::mouseReleaseEvent(QMouseEvent* event) {
             case DragKind::CutMove:
                 if (finished.moved) {
                     app::moveCut(controller_.document(), finished.cut, finished.pulse);
+                }
+                break;
+            case DragKind::BgaMove:
+                if (finished.moved && finished.pulse != finished.bga.y) {
+                    app::moveBgaEvent(controller_.document(), finished.bga.track, finished.bga.y, finished.pulse);
+                    controller_.selectBgaEvent(BgaEventRef{finished.bga.track, finished.pulse});
                 }
                 break;
             case DragKind::RubberBand:
@@ -576,7 +660,7 @@ void ChartEditorWidget::selectInRubberBand(const QRectF& area, bool additive) {
     const auto cols = columns();
     for (const auto& note : project.notes()) {
         const auto column = std::find_if(cols.begin(), cols.end(), [&](const Column& candidate) {
-            return candidate.kind != Column::Kind::Asset && candidate.x == note.lane;
+            return (candidate.kind == Column::Kind::Lane || candidate.kind == Column::Kind::BgmColumn) && candidate.x == note.lane;
         });
         if (column == cols.end()) {
             continue;
@@ -604,7 +688,26 @@ void ChartEditorWidget::selectInRubberBand(const QRectF& area, bool additive) {
 }
 
 void ChartEditorWidget::mouseDoubleClickEvent(QMouseEvent* event) {
-    if (mode_ != ChartEditMode::CutPoints || event->button() != Qt::LeftButton) {
+    if (event->button() != Qt::LeftButton) {
+        return;
+    }
+    if (const auto bga = columnAt(event->position().x()); bga && bga->kind == Column::Kind::Bga) {
+        const auto image = controller_.selectedBgaImage();
+        if (!image) {
+            emit controller_.statusMessage(QStringLiteral("右の BGA 一覧で、置く画像を選んでください"));
+            return;
+        }
+        try {
+            const auto track = static_cast<core::BgaTrack>(bga->x);
+            const auto pulse = controller_.snap(pulseAtY(event->position().y()), StudioController::snapModeFor(event->modifiers()));
+            app::placeBgaEvent(controller_.document(), track, pulse, *image);
+            controller_.selectBgaEvent(BgaEventRef{track, pulse});
+        } catch (const std::exception& error) {
+            reportError(error);
+        }
+        return;
+    }
+    if (mode_ != ChartEditMode::CutPoints) {
         return;
     }
     const auto column = columnAt(event->position().x());
@@ -745,7 +848,10 @@ void ChartEditorWidget::keyPressEvent(QKeyEvent* event) {
             case Qt::Key_0:
             case Qt::Key_Backspace: clearSelected(); return;
             case Qt::Key_Delete:
-                if (mode_ == ChartEditMode::CutPoints && !controller_.selectedCuts().empty()) {
+                if (const auto bga = controller_.selectedBgaEvent()) {
+                    app::removeBgaEvent(controller_.document(), bga->track, bga->y);
+                    controller_.selectBgaEvent(std::nullopt);
+                } else if (mode_ == ChartEditMode::CutPoints && !controller_.selectedCuts().empty()) {
                     app::removeCuts(controller_.document(), controller_.selectedCuts());
                 } else {
                     app::removeNotes(controller_.document(), controller_.selectedNotes());

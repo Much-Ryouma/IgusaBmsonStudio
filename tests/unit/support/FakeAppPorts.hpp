@@ -12,6 +12,7 @@
 #include "ibs/app/AssetImportService.hpp"
 #include "ibs/app/ChartStorage.hpp"
 #include "ibs/app/PlaybackService.hpp"
+#include "ibs/app/PreviewService.hpp"
 #include "ibs/app/SlicingService.hpp"
 
 namespace ibs::testing {
@@ -80,6 +81,17 @@ public:
         copies.emplace_back(from, to);
         files.insert(to);
     }
+};
+
+class RecordingLauncher final : public app::ProcessLauncher {
+public:
+    bool launch(const app::LaunchRequest& request) override {
+        requests.push_back(request);
+        return succeed;
+    }
+
+    bool succeed = true;
+    std::vector<app::LaunchRequest> requests;
 };
 
 }  // namespace ibs::testing

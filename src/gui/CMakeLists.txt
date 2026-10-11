@@ -4,15 +4,20 @@ qt_standard_project_setup()
 add_library(ibs_gui STATIC
     ArrangerWidget.cpp
     ArrangerWidget.hpp
+    BgaPanel.cpp
+    BgaPanel.hpp
     ChartEditorWidget.cpp
     ChartEditorWidget.hpp
     MainWindow.cpp
     MainWindow.hpp
+    QtProcessLauncher.hpp
     QtText.hpp
     SlicerPanel.cpp
     SlicerPanel.hpp
     SongSettingsDialog.cpp
     SongSettingsDialog.hpp
+    StudioSettingsDialog.cpp
+    StudioSettingsDialog.hpp
     StudioController.cpp
     StudioController.hpp
     StudioPalette.hpp

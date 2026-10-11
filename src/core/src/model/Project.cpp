@@ -107,6 +107,13 @@ void Project::retimeCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
     })->offsetPulses = newOffsetPulses;
 }
 
+void Project::setCutOrigin(CutPointId cutPointId, CutOrigin origin) {
+    static_cast<void>(cutPoint(cutPointId));
+    std::find_if(cutPoints_.begin(), cutPoints_.end(), [cutPointId](const CutPoint& existing) {
+        return existing.id == cutPointId;
+    })->origin = origin;
+}
+
 void Project::moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
     retimeCutPoint(cutPointId, newOffsetPulses);
     // Why not 自動検出の印のまま残す: 手で動かした切断点を再検出で消されないよう、手動の切断点として扱う

@@ -13,8 +13,10 @@ add_library(ibs_core STATIC
     src/bmson/BmsonImporter.cpp
     src/midi/MidiExporter.cpp
     src/mode/KeyMode.cpp
+    src/model/BgaEditing.cpp
     src/model/Project.cpp
     src/playback/PlaybackRange.cpp
+    src/sidecar/Sidecar.cpp
     src/slicing/CutPlanner.cpp
     src/slicing/Fft.cpp
     src/slicing/OnsetDetector.cpp

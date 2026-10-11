@@ -1,5 +1,7 @@
 #pragma once
 
+#include <optional>
+
 #include <vector>
 
 #include "ibs/core/mode/KeyMode.hpp"
@@ -9,9 +11,15 @@
 
 namespace ibs::core {
 
+struct ImageSize {
+    int width = 0;
+    int height = 0;
+};
+
 struct ValidationContext {
     const KeyMode* keyMode = nullptr;
     const FileSystemPort* fileSystem = nullptr;
+    std::optional<ImageSize> bannerImageSize;
 };
 
 [[nodiscard]] std::vector<Issue> validateProject(const Project& project, const ValidationContext& context);

@@ -2,6 +2,7 @@
 #include <QStringList>
 
 #include "MainWindow.hpp"
+#include "QtProcessLauncher.hpp"
 #include "QtText.hpp"
 #include "StudioController.hpp"
 #include "ibs/app/AssetImportService.hpp"
@@ -26,7 +27,9 @@ int main(int argc, char** argv) {
         // Why not 起動を止める: モード定義がなくても音切りと配置はでき、保存時の検証で V 系の警告として分かるため
     }
 
-    ibs::gui::StudioController controller(ibs::gui::StudioPorts{storage, audioSource, output, assetFiles, std::move(modes)});
+    ibs::gui::QtProcessLauncher launcher;
+    ibs::gui::StudioController controller(
+        ibs::gui::StudioPorts{storage, audioSource, output, assetFiles, std::move(modes), launcher});
     ibs::gui::MainWindow window(controller);
     window.show();
 

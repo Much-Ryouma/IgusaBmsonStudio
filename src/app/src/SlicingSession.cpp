@@ -17,6 +17,11 @@ void SlicingSession::setSettings(core::PlacementId placementId, const SliceSetti
     settings_[placementId] = settings;
 }
 
+void SlicingSession::replaceAllSettings(std::map<core::PlacementId, SliceSettings> settings) {
+    settings_ = std::move(settings);
+    clippedOffsets_.clear();
+}
+
 SlicePreview SlicingSession::previewWith(const core::Project& project, core::PlacementId placementId,
                                          const core::OnsetAnalysis& analysis, const SliceSettings& settings) {
     SlicePreview preview;

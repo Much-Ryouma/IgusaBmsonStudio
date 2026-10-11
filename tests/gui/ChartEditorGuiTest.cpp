@@ -6,7 +6,12 @@
 
 #include <gtest/gtest.h>
 
+#include "BgaPanel.hpp"
 #include "ChartEditorWidget.hpp"
+#include "SongSettingsDialog.hpp"
+#include "ibs/infra/fs/Utf8Path.hpp"
+#include <QLineEdit>
+#include <QListWidget>
 #include "GuiFixture.hpp"
 #include "ibs/core/timing/TimingEdits.hpp"
 
@@ -136,6 +141,56 @@ TEST(ChartEditorGui, GUI013_CutModeAddsAndMovesCutPoints) {
 
     GuiFixture::drag(fixture.editor(), fixture.cutMark(fixture.cuts[2]), QPointF(column->left + 10.0, fixture.editor()->yOf(1562.0)));
     EXPECT_EQ(fixture.project().absolutePulseOf(fixture.project().cutPoint(fixture.cuts[2])), 1560);
+}
+
+TEST(ChartEditorGui, GUI014_BgaImagesArePlacedMovedAndRemovedInTheirLanes) {
+    ChartFixture fixture;
+    ASSERT_TRUE(fixture.window().bgaPanel()->addImage(kChartDirectory / "movie" / "bg.png"));
+    EXPECT_FALSE(fixture.window().bgaPanel()->addImage(std::filesystem::path("elsewhere") / "bg.png"));
+    ASSERT_EQ(fixture.window().bgaPanel()->list()->count(), 1);
+    ASSERT_EQ(fixture.controller().selectedBgaImage(), std::optional<std::uint32_t>(1));
+    const auto column = fixture.editor()->bgaColumn(core::BgaTrack::Layer);
+
+    GuiFixture::doubleClick(fixture.editor(), QPointF(column->left + 10.0, fixture.editor()->yOf(1205.0)));
+    ASSERT_EQ(fixture.project().bga.layerEvents, (std::vector<core::BgaEvent>{{1200, 1}}));
+    EXPECT_EQ(fixture.project().bga.headers.front().name, "movie/bg.png");
+
+    GuiFixture::drag(fixture.editor(), QPointF(column->left + 10.0, fixture.editor()->yOf(1200.0) - 5.0),
+                     QPointF(column->left + 10.0, fixture.editor()->yOf(1440.0) - 5.0));
+    ASSERT_EQ(fixture.project().bga.layerEvents.front().y, 1440);
+    QTest::keyClick(fixture.editor(), Qt::Key_Delete);
+    EXPECT_TRUE(fixture.project().bga.layerEvents.empty());
+}
+
+TEST(ChartEditorGui, GUI015_ExternalPreviewStartsFromTheCursorMeasure) {
+    ChartFixture fixture;
+    fixture.controller().setPlayerSettings(app::PlayerSettings{"Pulsus.exe"});
+    fixture.controller().setCursorPulse(1000);
+
+    const auto outcome = fixture.controller().previewInPlayer();
+
+    ASSERT_TRUE(outcome.launched) << outcome.error;
+    ASSERT_EQ(fixture.launcher().requests.size(), 1u);
+    const auto& request = fixture.launcher().requests.front();
+    EXPECT_EQ(request.program, "Pulsus.exe");
+    EXPECT_EQ(request.arguments, (std::vector<std::string>{infra::pathToUtf8(kChartDirectory / ".~preview_song.bmson"), "-p", "-m", "1"}));
+}
+
+TEST(ChartEditorGui, GUI016_SongInfoImagesMustBeInsideTheChartFolder) {
+    ChartFixture fixture;
+    SongSettingsDialog dialog(SongSettingsDialog::Purpose::EditSong, fixture.project(),
+                              SongSettingsContext{kChartDirectory, {"beat-7k"}, 460.9});
+
+    dialog.acceptImage(QStringLiteral("banner_image"), kChartDirectory / "img" / "banner.png");
+    dialog.acceptImage(QStringLiteral("back_image"), std::filesystem::path("elsewhere") / "back.png");
+    dialog.titleField()->setText(QStringLiteral("いぐさの歌"));
+    const auto result = dialog.result();
+    fixture.controller().updateSongInfo(result.info, result.initialBpm);
+
+    EXPECT_EQ(fixture.project().info.bannerImage, "img/banner.png");
+    EXPECT_TRUE(fixture.project().info.backImage.empty());
+    EXPECT_EQ(fixture.project().info.title, "いぐさの歌");
+    EXPECT_EQ(fixture.controller().document().undoLabel(), "曲の情報");
 }
 
 }  // namespace

@@ -46,3 +46,23 @@ bmson 仕様の既定値・異常値の扱いどおりに JSON を読み込め�
 | KMJ-002 | mode_hint がない | 読み込む | `std::invalid_argument` |
 | KMJ-003 | kind が未知の値 | 読み込む | `std::invalid_argument` |
 | KMJ-004 | リポジトリの `modes/` フォルダ | カタログとして読み込む | beat-7k が見つかる |
+
+## サイドカーファイル (SCJ)
+
+- 対象: `serializeSidecar` / `parseSidecar` / `sidecarPathFor` / `loadSidecarFile`（`tests/unit/infra/sidecar/SidecarJsonCodecTest.cpp`）
+
+| ID | 前提 | 操作 | 期待結果 |
+|---|---|---|---|
+| SCJ-001 | 日本語の素材名、3 種類の切断点、テンポ変更の印、HFC・感度 0.7・12 分・寄せる範囲 15 ms の設定を持つ配置と、設定のない配置 | 書き出して読み直す | すべての値が一致し、設定のない配置は設定なしのまま |
+| SCJ-002 | format がない / version 99 / JSON でない / 未知の origin | 読む | すべて `SidecarFormatError` |
+| SCJ-003 | `song/song[ANOTHER].bmson` / 存在しないサイドカー | サイドカーの場所 / 読む | `song/song[ANOTHER].ibs.json` / なし（エラーにしない） |
+
+## 画像の大きさ (IMG)
+
+- 対象: `imageSizeFromHeader` / `readImageSize`（`tests/unit/infra/image/ImageSizeTest.cpp`）
+- 画像はテストの中でヘッダーだけを組み立てる
+
+| ID | 前提 | 操作 | 期待結果 |
+|---|---|---|---|
+| IMG-001 | 300×80 の png（IHDR）、jpeg（SOF0）、bmp（高さが負の上から下の並び） | 大きさを読む | 3 つとも 300×80 |
+| IMG-002 | gif / 存在しないファイル | 大きさを読む | なし |

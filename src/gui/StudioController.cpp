@@ -40,7 +40,8 @@ StudioController::StudioController(StudioPorts ports, QObject* parent)
       library_(ports.storage, ports.audioSource),
       slicing_(document_, library_),
       playback_(library_, ports.output),
-      importer_(ports.assetFiles) {
+      importer_(ports.assetFiles),
+      previewer_(charts_, ports.launcher) {
     // Why not スレッド数を CPU に任せる: 数分のステムを同時にいくつもデコードするとメモリを大きく使い、
     // 画面の描画まで遅くなるため、同時に処理する素材を 2 つまでにする
     pool_.setMaxThreadCount(2);
@@ -67,6 +68,9 @@ void StudioController::resetForNewDocument() {
     selectedCuts_.clear();
     selectedNotes_.clear();
     preview_.reset();
+    selectedBgaImage_.reset();
+    selectedBgaEvent_.reset();
+    slicing_.replaceAllSettings({});
     mix_ = {};
     cursorPulse_ = 0;
     ++analysisGeneration_;
@@ -100,14 +104,16 @@ bool StudioController::open(const std::filesystem::path& path, QString* error) {
     }
     document_.replace(std::move(outcome.chart->project), path);
     resetForNewDocument();
+    slicing_.replaceAllSettings(std::move(outcome.chart->sliceSettings));
     if (!outcome.chart->notices.empty()) {
-        emit statusMessage(QStringLiteral("読み込み時の通知が %1 件あります").arg(outcome.chart->notices.size()));
+        QString first = toQString(outcome.chart->notices.front().message);
+        emit statusMessage(QStringLiteral("読み込み時の通知が %1 件あります（%2 …）").arg(outcome.chart->notices.size()).arg(first));
     }
     return true;
 }
 
 app::SaveOutcome StudioController::save(const std::filesystem::path& path) {
-    auto outcome = charts_.save(document_.project(), path);
+    auto outcome = charts_.save(document_.project(), path, slicing_.allSettings());
     if (outcome.saved) {
         const bool moved = document_.chartDirectory() != path.parent_path();
         document_.markSaved(path);
@@ -167,6 +173,16 @@ void StudioController::onDocumentChanged() {
     }
     std::erase_if(selectedCuts_, [&project](core::CutPointId id) { return !containsCut(project, id); });
     std::erase_if(selectedNotes_, [&project](core::NoteId id) { return !project.containsNote(id); });
+    if (selectedBgaImage_ && std::none_of(project.bga.headers.begin(), project.bga.headers.end(),
+                                          [this](const core::BgaHeader& header) { return header.id == *selectedBgaImage_; })) {
+        selectedBgaImage_.reset();
+    }
+    if (selectedBgaEvent_) {
+        const auto& events = core::eventsOf(project.bga, selectedBgaEvent_->track);
+        if (std::none_of(events.begin(), events.end(), [this](const core::BgaEvent& event) { return event.y == selectedBgaEvent_->y; })) {
+            selectedBgaEvent_.reset();
+        }
+    }
     emit documentChanged();
     emit selectionChanged();
     if (preview_) {
@@ -216,6 +232,14 @@ void StudioController::setSelectedNotes(std::vector<core::NoteId> notes) {
 
 const core::KeyMode* StudioController::keyMode() const { return charts_.keyModeFor(document_.project()); }
 
+std::vector<std::string> StudioController::modeHints() const {
+    std::vector<std::string> hints;
+    for (const auto& mode : charts_.modes().modes()) {
+        hints.push_back(mode.modeHint());
+    }
+    return hints;
+}
+
 void StudioController::copySelectedNotes() {
     clipboard_ = core::copyPattern(document_.project(), selectedNotes_);
     emit statusMessage(QStringLiteral("%1 個のノーツの割当をコピーしました").arg(clipboard_.entries.size()));
@@ -242,6 +266,28 @@ app::TimingEditOutcome StudioController::editTiming(const QString& label,
         emit tempoDesynced(outcome);
     }
     return outcome;
+}
+
+app::PreviewOutcome StudioController::previewInPlayer() {
+    auto outcome = previewer_.preview(document_, cursorPulse_, playerSettings_);
+    if (!outcome.launched) {
+        emit statusMessage(toQString(outcome.error));
+    } else {
+        emit statusMessage(QStringLiteral("プレーヤーを起動しました: 小節 %1 から（%2）")
+                               .arg(app::previewPositionAt(document_.project(), cursorPulse_).measure)
+                               .arg(toQString(outcome.file.filename())));
+    }
+    return outcome;
+}
+
+void StudioController::selectBgaImage(std::optional<std::uint32_t> id) {
+    selectedBgaImage_ = id;
+    emit selectionChanged();
+}
+
+void StudioController::selectBgaEvent(std::optional<BgaEventRef> event) {
+    selectedBgaEvent_ = event;
+    emit selectionChanged();
 }
 
 void StudioController::setSnapDivisions(int divisions) { snapDivisions_ = std::max(0, divisions); }

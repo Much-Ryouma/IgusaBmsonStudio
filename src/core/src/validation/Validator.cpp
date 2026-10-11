@@ -140,6 +140,11 @@ std::vector<Issue> validateProject(const Project& project, const ValidationConte
     checkTiming(project, issues);
     checkFiles(project, context.fileSystem, issues);
     checkNotes(project, context.keyMode, issues);
+    if (context.bannerImageSize && context.bannerImageSize->width * 4 != context.bannerImageSize->height * 15) {
+        issues.push_back({Severity::Warning, "V10",
+                          "banner_image が 15:4 ではありません（" + std::to_string(context.bannerImageSize->width) + "×" +
+                              std::to_string(context.bannerImageSize->height) + "。推奨は 300×80 など）"});
+    }
     for (const auto placementId : project.tempoAffectedPlacements()) {
         const auto& placement = project.placement(placementId);
         issues.push_back({Severity::Warning, "V12",

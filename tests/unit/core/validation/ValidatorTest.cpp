@@ -25,7 +25,7 @@ protected:
     KeyMode mode = ibs::testing::beat7k();
     FakeFileSystem fileSystem{{"a.wav", "b.wav"}};
 
-    std::vector<Issue> validate() { return validateProject(project, ValidationContext{&mode, &fileSystem}); }
+    std::vector<Issue> validate() { return validateProject(project, ValidationContext{&mode, &fileSystem, {}}); }
 
     CutPointId cutPointAt(const std::string& asset, Pulse y) {
         const Asset* existing = project.findAssetByName(asset);
@@ -123,7 +123,7 @@ TEST_F(ValidatorTest, VAL011_CountsLayeredNotesOnceAndSkipsBgmColumns) {
 }
 
 TEST_F(ValidatorTest, VAL012_WarnsWhenModeDefinitionIsMissing) {
-    const auto issues = validateProject(project, ValidationContext{nullptr, &fileSystem});
+    const auto issues = validateProject(project, ValidationContext{nullptr, &fileSystem, {}});
 
     const auto issue = findIssue(issues, "V00");
     ASSERT_TRUE(issue.has_value());
@@ -138,6 +138,16 @@ TEST_F(ValidatorTest, VAL013_WarnsAboutPlacementsDesyncedByTempoChange) {
     ASSERT_TRUE(issue.has_value());
     EXPECT_EQ(issue->severity, Severity::Warning);
     EXPECT_NE(issue->message.find("y=960"), std::string::npos);
+}
+
+TEST_F(ValidatorTest, VAL014_WarnsWhenBannerIsNot15To4) {
+    const auto wide = validateProject(project, ValidationContext{&mode, &fileSystem, ImageSize{300, 80}});
+    const auto square = validateProject(project, ValidationContext{&mode, &fileSystem, ImageSize{256, 256}});
+
+    EXPECT_FALSE(findIssue(wide, "V10").has_value());
+    const auto issue = findIssue(square, "V10");
+    ASSERT_TRUE(issue.has_value());
+    EXPECT_EQ(issue->severity, Severity::Warning);
 }
 
 }  // namespace

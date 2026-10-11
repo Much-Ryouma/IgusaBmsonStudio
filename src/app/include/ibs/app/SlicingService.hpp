@@ -25,10 +25,7 @@ public:
     [[nodiscard]] core::AudioBuffer load(const std::filesystem::path& path) override;
 };
 
-struct SliceSettings {
-    core::OnsetParameters onset;
-    core::QuantizeParameters quantize;
-};
+using SliceSettings = core::SliceSettings;
 
 struct SliceOutcome {
     bool succeeded = false;

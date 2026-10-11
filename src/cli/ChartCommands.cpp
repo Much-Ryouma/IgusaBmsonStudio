@@ -91,7 +91,7 @@ int runConvert(const ChartArguments& arguments, const CommonOptions& options) {
     printIssues(opened.chart->notices);
 
     const auto outputPath = infra::pathFromUtf8(arguments.convertOutput);
-    const auto saved = service.save(opened.chart->project, outputPath);
+    const auto saved = service.save(opened.chart->project, outputPath, opened.chart->sliceSettings);
     printIssues(saved.issues);
     if (!saved.saved) {
         std::cerr << saved.error << "\n";

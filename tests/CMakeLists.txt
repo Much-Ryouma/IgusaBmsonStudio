@@ -21,6 +21,7 @@ ibs_add_test_suite(ibs_core_tests
         unit/core/mode/KeyModeTest.cpp
         unit/core/model/ProjectTest.cpp
         unit/core/playback/PlaybackRangeTest.cpp
+        unit/core/sidecar/SidecarTest.cpp
         unit/core/slicing/CutPlannerTest.cpp
         unit/core/slicing/FftTest.cpp
         unit/core/slicing/OnsetDetectorTest.cpp
@@ -36,8 +37,10 @@ ibs_add_test_suite(ibs_infra_tests
         unit/infra/audio/MiniaudioOutputTest.cpp
         unit/infra/bmson/BmsonJsonCodecTest.cpp
         unit/infra/fs/FileIoTest.cpp
+        unit/infra/image/ImageSizeTest.cpp
         unit/infra/midi/StandardMidiFileTest.cpp
         unit/infra/mode/KeyModeJsonLoaderTest.cpp
+        unit/infra/sidecar/SidecarJsonCodecTest.cpp
     LIBRARIES ibs::infra)
 
 ibs_add_test_suite(ibs_app_tests
@@ -45,10 +48,12 @@ ibs_add_test_suite(ibs_app_tests
         unit/app/ArrangementCommandsTest.cpp
         unit/app/AssetImportServiceTest.cpp
         unit/app/AudioLibraryTest.cpp
+        unit/app/BgaCommandsTest.cpp
         unit/app/ChartCommandsTest.cpp
         unit/app/ChartServiceTest.cpp
         unit/app/EditorDocumentTest.cpp
         unit/app/PlaybackServiceTest.cpp
+        unit/app/PreviewServiceTest.cpp
         unit/app/SlicingServiceTest.cpp
         unit/app/SlicingSessionTest.cpp
         unit/app/TimelineViewportTest.cpp

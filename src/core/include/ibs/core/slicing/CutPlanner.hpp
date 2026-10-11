@@ -19,6 +19,11 @@ struct QuantizeParameters {
     double attackClipWarningMs = 10.0;
 };
 
+struct SliceSettings {
+    OnsetParameters onset;
+    QuantizeParameters quantize;
+};
+
 class BeatGrid {
 public:
     BeatGrid(const TimingData& timing, int divisionsPerWholeNote);

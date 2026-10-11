@@ -24,9 +24,10 @@ public:
     static constexpr int kAssetColumnWidth = 20;
     static constexpr int kDensityWidth = 28;
     static constexpr int kNoteHeight = 6;
+    static constexpr int kBgaColumnWidth = 34;
 
     struct Column {
-        enum class Kind { Lane, BgmColumn, Asset } kind = Kind::Lane;
+        enum class Kind { Lane, BgmColumn, Bga, Asset } kind = Kind::Lane;
         int x = 0;
         core::AssetId asset;
         double left = 0.0;
@@ -45,6 +46,7 @@ public:
     [[nodiscard]] std::vector<Column> columns() const;
     [[nodiscard]] std::optional<Column> laneColumn(int x) const;
     [[nodiscard]] std::optional<Column> assetColumn(core::AssetId asset) const;
+    [[nodiscard]] std::optional<Column> bgaColumn(core::BgaTrack track) const;
     [[nodiscard]] double yOf(double pulse) const;
     [[nodiscard]] double pulseAtY(double y) const;
     void scrollToPulse(double pulse);
@@ -68,13 +70,14 @@ protected:
     bool focusNextPrevChild(bool next) override;
 
 private:
-    enum class DragKind { None, NoteLane, NoteLength, CutMove, RubberBand };
+    enum class DragKind { None, NoteLane, NoteLength, CutMove, BgaMove, RubberBand };
     struct Drag {
         DragKind kind = DragKind::None;
         QPointF origin;
         QPointF current;
         core::NoteId note;
         core::CutPointId cut;
+        BgaEventRef bga;
         core::Pulse pulse = 0;
         bool moved = false;
     };
@@ -89,6 +92,8 @@ private:
     void paintTiming(QPainter& painter);
     void paintCutMarks(QPainter& painter, const std::vector<Column>& columns);
     void paintNotes(QPainter& painter, const std::vector<Column>& columns);
+    void paintBga(QPainter& painter, const std::vector<Column>& columns);
+    [[nodiscard]] std::optional<BgaEventRef> bgaEventAt(QPointF point) const;
     void paintDensity(QPainter& painter);
     void paintHeader(QPainter& painter, const std::vector<Column>& columns);
     void selectInRubberBand(const QRectF& area, bool additive);

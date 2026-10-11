@@ -23,6 +23,8 @@
 #include <QToolBar>
 
 #include "ArrangerWidget.hpp"
+#include "BgaPanel.hpp"
+#include "StudioSettingsDialog.hpp"
 #include "ChartEditorWidget.hpp"
 #include "QtText.hpp"
 #include "SlicerPanel.hpp"
@@ -58,9 +60,16 @@ MainWindow::MainWindow(StudioController& controller, QWidget* parent) : QMainWin
     auto* splitter = new QSplitter(Qt::Vertical, this);
     tabs_ = new QTabWidget(splitter);
     arranger_ = new ArrangerWidget(controller_, tabs_);
-    chartEditor_ = new ChartEditorWidget(controller_, tabs_);
+    auto* chartPage = new QWidget(tabs_);
+    auto* chartLayout = new QHBoxLayout(chartPage);
+    chartLayout->setContentsMargins(0, 0, 0, 0);
+    chartEditor_ = new ChartEditorWidget(controller_, chartPage);
+    bgaPanel_ = new BgaPanel(controller_, chartPage);
+    bgaPanel_->setFixedWidth(240);
+    chartLayout->addWidget(chartEditor_, 1);
+    chartLayout->addWidget(bgaPanel_);
     tabs_->addTab(arranger_, QStringLiteral("アレンジャー"));
-    tabs_->addTab(chartEditor_, QStringLiteral("譜面"));
+    tabs_->addTab(chartPage, QStringLiteral("譜面"));
     auto* bottom = new QWidget(splitter);
     auto* bottomLayout = new QHBoxLayout(bottom);
     bottomLayout->setContentsMargins(0, 0, 0, 0);
@@ -76,6 +85,7 @@ MainWindow::MainWindow(StudioController& controller, QWidget* parent) : QMainWin
     splitter->setSizes({540, 360});
     setCentralWidget(splitter);
 
+    controller_.setPlayerSettings(StudioSettingsDialog::load());
     buildMenus();
     buildChartMenu();
     buildToolBar();
@@ -118,6 +128,14 @@ void MainWindow::buildMenus() {
     auto* play = menuBar()->addMenu(QStringLiteral("再生(&P)"));
     play->addAction(QStringLiteral("カーソルから曲を再生"), QKeySequence(Qt::Key_F5), this, [this] { controller_.playSongFromCursor(); });
     play->addAction(QStringLiteral("停止"), QKeySequence(Qt::Key_F6), this, [this] { controller_.stopPlayback(); });
+    play->addSeparator();
+    play->addAction(QStringLiteral("外部プレーヤーで再生（カーソルの小節から）"), QKeySequence(Qt::Key_F7), this, [this] {
+        if (controller_.playerSettings().executable.empty()) {
+            editSettings();
+        }
+        controller_.previewInPlayer();
+    });
+    play->addAction(QStringLiteral("設定…"), this, &MainWindow::editSettings);
 
     auto* view = menuBar()->addMenu(QStringLiteral("表示(&V)"));
     view->addAction(QStringLiteral("曲全体を表示"), QKeySequence(QStringLiteral("Ctrl+0")), this, [this] { arranger_->zoomToFit(); });
@@ -142,7 +160,9 @@ void MainWindow::buildMenus() {
                                                 "  1〜7: 鍵盤に割当、S: スクラッチ、0: 割当を外す（BGM に戻す）\n"
                                                 "  ノーツを横にドラッグ: レーン変更、上端か Shift+ドラッグ: ロングノーツ\n"
                                                 "  空いた所をドラッグ: 範囲選択、クリック: カーソル、Ctrl+C / Ctrl+V: 割当パターン\n"
-                                                "  右クリック: BPM・STOP・拍子・小節線、Tab: 切断点モード（ダブルクリックで追加、ドラッグで移動）"));
+                                                "  右クリック: BPM・STOP・拍子・小節線、Tab: 切断点モード（ダブルクリックで追加、ドラッグで移動）\n"
+                                                "  BGA / LYR / POOR 列: 右の一覧で画像を選び、ダブルクリックで置く。ドラッグで移動、Delete で削除\n\n"
+                                                "F7: 外部プレーヤー（Pulsus など）でカーソルの小節から再生"));
     });
 }
 
@@ -198,7 +218,8 @@ void MainWindow::newChart() {
     if (!confirmDiscard()) {
         return;
     }
-    SongSettingsDialog dialog(SongSettingsDialog::Purpose::NewProject, core::Project{}, this);
+    SongSettingsDialog dialog(SongSettingsDialog::Purpose::NewProject, core::Project{},
+                              SongSettingsContext{{}, controller_.modeHints(), std::nullopt}, this);
     if (dialog.exec() != QDialog::Accepted) {
         return;
     }
@@ -292,7 +313,12 @@ void MainWindow::importAudio() {
 }
 
 void MainWindow::editSongInfo() {
-    SongSettingsDialog dialog(SongSettingsDialog::Purpose::EditSong, controller_.project(), this);
+    std::optional<double> suggested;
+    if (const auto* mode = controller_.keyMode()) {
+        suggested = core::recommendedTotal(core::countPlayableNotes(controller_.project(), *mode));
+    }
+    SongSettingsDialog dialog(SongSettingsDialog::Purpose::EditSong, controller_.project(),
+                              SongSettingsContext{controller_.document().chartDirectory(), controller_.modeHints(), suggested}, this);
     if (dialog.exec() == QDialog::Accepted) {
         const auto result = dialog.result();
         controller_.updateSongInfo(result.info, result.initialBpm);
@@ -399,6 +425,14 @@ void MainWindow::handleTempoDesync(const app::TimingEditOutcome& outcome) {
         }
     } catch (const std::exception& error) {
         showStatus(toQString(error.what()));
+    }
+}
+
+void MainWindow::editSettings() {
+    StudioSettingsDialog dialog(controller_.playerSettings(), this);
+    if (dialog.exec() == QDialog::Accepted) {
+        controller_.setPlayerSettings(dialog.result());
+        StudioSettingsDialog::save(dialog.result());
     }
 }
 

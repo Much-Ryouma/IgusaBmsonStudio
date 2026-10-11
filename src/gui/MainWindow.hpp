@@ -15,6 +15,7 @@ class QTabWidget;
 namespace ibs::gui {
 
 class ArrangerWidget;
+class BgaPanel;
 class ChartEditorWidget;
 class SlicerPanel;
 class WaveformSlicerWidget;
@@ -29,6 +30,7 @@ public:
     [[nodiscard]] WaveformSlicerWidget* slicer() const noexcept { return slicer_; }
     [[nodiscard]] ChartEditorWidget* chartEditor() const noexcept { return chartEditor_; }
     [[nodiscard]] QTabWidget* tabs() const noexcept { return tabs_; }
+    [[nodiscard]] BgaPanel* bgaPanel() const noexcept { return bgaPanel_; }
     void handleTempoDesync(const app::TimingEditOutcome& outcome);
     [[nodiscard]] SlicerPanel* slicerPanel() const noexcept { return slicerPanel_; }
     [[nodiscard]] QAction* undoAction() const noexcept { return undo_; }
@@ -52,6 +54,7 @@ private:
     bool saveTo(const std::filesystem::path& path);
     void importAudio();
     void editSongInfo();
+    void editSettings();
     void showStatus(const QString& message);
     void buildChartMenu();
     void refreshChartStats();
@@ -62,6 +65,7 @@ private:
     WaveformSlicerWidget* slicer_ = nullptr;
     ChartEditorWidget* chartEditor_ = nullptr;
     QTabWidget* tabs_ = nullptr;
+    BgaPanel* bgaPanel_ = nullptr;
     QLabel* chartStats_ = nullptr;
     SlicerPanel* slicerPanel_ = nullptr;
     QAction* undo_ = nullptr;
