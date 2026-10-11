@@ -16,3 +16,4 @@ compile_commands.json
 
 # Preview temp files written next to charts
 .~preview_*.bmson
+.~nulltest_*

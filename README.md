@@ -48,6 +48,20 @@ GUI を実行するときは、Qt の DLL を exe の横に配置します。
 C:\Qt\6.8.0\msvc2022_64\bin\windeployqt.exe build\msvc\src\gui\Release\IgusaBmsonStudio.exe
 ```
 
+### 配布用の zip を作る
+
+```bat
+set CMAKE_PREFIX_PATH=C:\Qt\6.8.0\msvc2022_64
+cmake --preset windows-msvc
+cmake --build --preset windows-msvc-release
+cpack --preset windows-msvc-release
+```
+
+`build/msvc/package/IgusaBmsonStudio-<バージョン>-win64.zip` ができます。中身は exe 2 つ、Qt の DLL（windeployqt で集めたもの）、Visual C++ ランタイム、`modes/`・`midi_profiles/`、`README.txt`（[packaging/README.txt](packaging/README.txt)）、ライセンス一式です。
+`v0.1.0` のようなタグを push すると、GitHub Actions（`.github/workflows/release.yml`）が同じ zip を作り、下書きのリリースに添付します。タグと `CMakeLists.txt` の `VERSION` が違うと止まります。
+
+アプリのアイコンは `resources/icons/` に `app.png` と `app.ico` を置くと組み込まれます（[resources/icons/README.md](resources/icons/README.md)）。
+
 Qt を使わずに core / CLI / テストだけをビルドする場合は、`core-only` プリセット（Ninja）を使います。
 
 画面のテスト（`StudioGui`）は、画面を出さずに（`QT_QPA_PLATFORM=offscreen`）実行されます。Qt の DLL のフォルダは ctest が自動で PATH に加えます。
@@ -65,6 +79,8 @@ Qt Creator では `B:\CMakeLists.txt` を開き直してください（以前の
 `subst` の割り当ては再起動で消えるので、毎回実行するか、スタートアップに登録してください。
 
 ## GUI の使い方
+
+詳しい使い方（画面の説明つき）は [Wiki](https://github.com/Much-Ryouma/IgusaBmsonStudio/wiki) にあります。
 
 1. **ファイル → 新しい譜面** で保存先の `.bmson`、タイトル、BPM を決める（既存の譜面は **開く**）
 2. **ファイル → 素材を取り込む** でフレーズの wav / ogg を選ぶ。譜面のフォルダの外にあるファイルは、確認のうえフォルダにコピーします
@@ -126,6 +142,8 @@ tests/gui    画面のテスト（画面を出さずに実行）
 tools        開発用のスクリプト（音切りの精度評価など）
 modes        譜面モードの定義（レーン構成）
 midi_profiles MIDI 出力の形式定義
+packaging    配布用 zip に入れる README・ライセンス、Windows のバージョン情報
+resources    アプリのアイコン
 ```
 
 ## ライセンス

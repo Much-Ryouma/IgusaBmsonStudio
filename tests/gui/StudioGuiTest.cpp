@@ -1,15 +1,22 @@
 #include <QAction>
 #include <QLabel>
+#include <QDir>
+#include <QFile>
 #include <QMenu>
+#include <QTextBrowser>
 #include <QPushButton>
 #include <QSlider>
 #include <QTest>
 
 #include <gtest/gtest.h>
 
+#include "AboutDialog.hpp"
+#include "AppIcon.hpp"
 #include "ArrangerWidget.hpp"
 #include "GuiFixture.hpp"
 #include "StudioSettings.hpp"
+#include "StudioSettingsDialog.hpp"
+#include "ibs/core/BuildInfo.hpp"
 #include "SlicerPanel.hpp"
 
 namespace ibs::gui::testing {
@@ -192,6 +199,35 @@ TEST(StudioGui, GUI025_AuditioningASliceMovesOnlyTheWaveformPlayhead) {
 
     fixture.controller().playSongFromCursor();
     EXPECT_TRUE(fixture.controller().songPlayheadPulse().has_value());
+}
+
+TEST(StudioGui, GUI026_AboutDialogShowsIconVersionAndLicenses) {
+    AboutDialog dialog;
+
+    const QPixmap icon = dialog.iconLabel()->pixmap();
+    EXPECT_EQ(icon.width(), 128);
+    EXPECT_EQ(icon.height(), 128);
+    EXPECT_TRUE(dialog.versionLabel()->text().contains(QString::fromLatin1(core::kVersion.data(), static_cast<int>(core::kVersion.size()))));
+    const QString notices = dialog.notices()->toPlainText();
+    EXPECT_TRUE(notices.contains(QStringLiteral("LGPLv3")));
+    EXPECT_TRUE(notices.contains(QStringLiteral("miniaudio")));
+    EXPECT_FALSE(appIcon().availableSizes().isEmpty());
+}
+
+TEST(StudioGui, GUI027_SettingsAreKeptInAnIniFileThatCanBeEditedByHand) {
+    app::PlayerSettings player;
+    player.executable = QDir::toNativeSeparators(QStringLiteral("C:/Games/Pulsus/Pulsus.exe")).toStdString();
+    StudioSettingsDialog::save(player);
+
+    QFile file(studioSettingsFile());
+    ASSERT_TRUE(file.open(QIODevice::ReadOnly));
+    const QString text = QString::fromUtf8(file.readAll());
+    EXPECT_TRUE(text.contains(QStringLiteral("[preview]")));
+    EXPECT_TRUE(text.contains(QStringLiteral("executable=C:/Games/Pulsus/Pulsus.exe")));
+    EXPECT_EQ(StudioSettingsDialog::load().executable, player.executable);
+    EXPECT_TRUE(studioSettingsWritable());
+    file.close();
+    QFile::remove(studioSettingsFile());
 }
 
 }  // namespace

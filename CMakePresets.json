@@ -98,5 +98,24 @@
         "outputOnFailure": true
       }
     }
+  ],
+  "packagePresets": [
+    {
+      "name": "ci-windows",
+      "configurePreset": "ci-windows",
+      "generators": [
+        "ZIP"
+      ]
+    },
+    {
+      "name": "windows-msvc-release",
+      "configurePreset": "windows-msvc",
+      "configurations": [
+        "Release"
+      ],
+      "generators": [
+        "ZIP"
+      ]
+    }
   ]
 }

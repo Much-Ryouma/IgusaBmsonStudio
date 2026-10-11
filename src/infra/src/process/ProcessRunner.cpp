@@ -43,7 +43,7 @@ std::wstring quoteWindowsArgument(const std::wstring& argument) {
 int runProcessAndWait(const std::string& program, const std::vector<std::string>& arguments,
                       const std::filesystem::path& workingDirectory) {
 #if defined(_WIN32)
-    std::wstring commandLine = quoteWindowsArgument(pathFromUtf8(program).wstring());
+    std::wstring commandLine = quoteWindowsArgument(pathFromUtf8(program).make_preferred().wstring());
     for (const auto& argument : arguments) {
         commandLine += L' ';
         commandLine += quoteWindowsArgument(pathFromUtf8(argument).wstring());

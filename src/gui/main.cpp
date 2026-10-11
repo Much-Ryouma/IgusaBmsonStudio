@@ -1,11 +1,14 @@
 #include <QApplication>
 #include <QStringList>
 
+#include "AppIcon.hpp"
 #include "MainWindow.hpp"
 #include "QtProcessLauncher.hpp"
 #include "QtText.hpp"
+#include "QtTranslations.hpp"
 #include "StudioController.hpp"
 #include "ibs/app/AssetImportService.hpp"
+#include "ibs/core/BuildInfo.hpp"
 #include "ibs/app/ChartStorage.hpp"
 #include "ibs/app/SlicingService.hpp"
 #include "ibs/infra/audio/MiniaudioOutput.hpp"
@@ -15,6 +18,9 @@
 int main(int argc, char** argv) {
     QApplication application(argc, argv);
     QApplication::setApplicationName(QStringLiteral("IgusaBmsonStudio"));
+    QApplication::setApplicationVersion(ibs::gui::toQString(ibs::core::kVersion));
+    QApplication::setWindowIcon(ibs::gui::appIcon());
+    ibs::gui::installQtJapaneseTranslation(application);
 
     ibs::app::LocalChartStorage storage;
     ibs::app::LocalAudioSource audioSource;

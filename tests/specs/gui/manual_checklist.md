@@ -91,3 +91,16 @@
 - [ ] コマンドラインで `igusa-cli stats <譜面>` と `igusa-cli nulltest <譜面>` が使え、`--json` で JSON が出る
 - [ ] 実際の BOF22 用の作品 1 曲を、素材の取り込み → 音切り → 割当 → 曲の情報 → 保存 → ヌルテスト → Pulsus で確認、まで通しで作れる
 
+
+## リリース前（配布用 zip）
+
+- [ ] `cpack --preset windows-msvc-release` で `build/msvc/package/IgusaBmsonStudio-<版>-win64.zip` ができる
+- [ ] zip を、Qt も Visual Studio も入っていない PC（または別ユーザー）で展開し、`IgusaBmsonStudio.exe` が起動する。`igusa-cli --version` も動く
+- [ ] ダイアログの OK / キャンセル などのボタンが日本語で出る
+- [ ] 「ヘルプ → バージョン情報」に、版番号・アイコン・ライセンスの一覧が出る。リンクがブラウザで開く
+- [ ] 「ヘルプ → 使い方（Wiki）を開く」（F1）で Wiki が開く
+- [ ] `resources/icons/app.ico` を置いてビルドした exe のアイコンがエクスプローラーで変わり、プロパティの「詳細」に版番号が出る
+- [ ] zip の中に `README.txt`・`LICENSE.txt`・`THIRD_PARTY_NOTICES.txt`・`licenses/` がある
+- [ ] 展開したフォルダで設定を変えると、exe の横に `IgusaBmsonStudio.ini` ができ、メモ帳で読める（日本語のパスもそのまま読める）。`regedit` で `HKEY_CURRENT_USER\Software\IgusaBmsonStudio` が作られていない
+- [ ] `IgusaBmsonStudio.ini` を消して起動すると、初期状態（プレーヤー未設定・最近使った譜面なし）に戻る
+- [ ] 書き込めないフォルダ（例 `C:\Program Files` の下）に置いて起動すると、ステータスバーに「設定を保存できません」と出る

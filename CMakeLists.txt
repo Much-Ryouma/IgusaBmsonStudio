@@ -3,11 +3,13 @@ cmake_minimum_required(VERSION 3.24)
 project(IgusaBmsonStudio
     VERSION 0.1.0
     DESCRIPTION "bmson chart authoring tool: slicing, chart editing and preview"
+    HOMEPAGE_URL "https://github.com/Much-Ryouma/IgusaBmsonStudio"
     LANGUAGES C CXX)
 
 option(IBS_BUILD_GUI   "Build the Qt GUI application" ON)
 option(IBS_BUILD_CLI   "Build the command line tool" ON)
 option(IBS_BUILD_TESTS "Build unit tests" ON)
+option(IBS_BUILD_DOC_TOOLS "Build the tool that captures screenshots for the wiki" OFF)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -27,6 +29,7 @@ endforeach()
 list(APPEND CMAKE_MODULE_PATH "${CMAKE_CURRENT_SOURCE_DIR}/cmake")
 include(CompilerOptions)
 include(Dependencies)
+include(WindowsResources)
 
 add_subdirectory(src/core)
 add_subdirectory(src/infra)
@@ -38,9 +41,14 @@ endif()
 
 if(IBS_BUILD_GUI)
     add_subdirectory(src/gui)
+    if(IBS_BUILD_DOC_TOOLS)
+        add_subdirectory(tools/wiki_screenshots)
+    endif()
 endif()
 
 if(IBS_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
 endif()
+
+include(Packaging)

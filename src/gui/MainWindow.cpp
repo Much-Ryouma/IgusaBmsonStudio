@@ -7,6 +7,9 @@
 #include <QLineEdit>
 #include <QCloseEvent>
 #include <QComboBox>
+#include <QDesktopServices>
+#include <QDir>
+#include <QUrl>
 #include <QFileDialog>
 #include <QFileInfo>
 #include <QHBoxLayout>
@@ -26,6 +29,7 @@
 
 #include "ArrangerWidget.hpp"
 #include "BgaPanel.hpp"
+#include "AboutDialog.hpp"
 #include "NullTestDialog.hpp"
 #include "StatisticsDialog.hpp"
 #include "StudioSettingsDialog.hpp"
@@ -56,15 +60,16 @@ const QString kFollowPlaybackKey = QStringLiteral("view/followPlayback");
 std::vector<std::string> loadRecentFiles() {
     std::vector<std::string> recent;
     for (const auto& entry : openStudioSettings()->value(kRecentFilesKey).toStringList()) {
-        recent.push_back(toUtf8(entry));
+        recent.push_back(toUtf8(QDir::toNativeSeparators(entry)));
     }
     return recent;
 }
 
 void storeRecentFiles(const std::vector<std::string>& recent) {
     QStringList entries;
+    // Why not OS の区切り文字のまま書く: ini では \ が \\ と二重に書かれ、利用者が手で直すときに読みにくいため
     for (const auto& entry : recent) {
-        entries << toQString(entry);
+        entries << QDir::fromNativeSeparators(toQString(entry));
     }
     openStudioSettings()->setValue(kRecentFilesKey, entries);
 }
@@ -160,6 +165,10 @@ MainWindow::MainWindow(StudioController& controller, QWidget* parent) : QMainWin
     const auto settings = openStudioSettings();
     restoreGeometry(settings->value(kGeometryKey).toByteArray());
     restoreState(settings->value(kStateKey).toByteArray());
+    if (!studioSettingsWritable()) {
+        statusBar()->showMessage(QStringLiteral("設定を保存できません（%1 に書き込めません）。書き込めるフォルダに展開してください")
+                                     .arg(QDir::toNativeSeparators(studioSettingsFile())));
+    }
 }
 
 void MainWindow::buildMenus() {
@@ -249,6 +258,14 @@ void MainWindow::buildMenus() {
                                                 "  BGA / LYR / POOR 列: 右の一覧で画像を選び、ダブルクリックで置く。ドラッグで移動、Delete で削除\n\n"
                                                 "F7: 外部プレーヤー（Pulsus など）でカーソルの小節から再生\n"
                                                 "Ctrl+Shift+I: 譜面の統計、統計 → ヌルテスト: 配置どおりに鳴るかの確認"));
+    });
+    help->addAction(QStringLiteral("使い方（Wiki）を開く"), QKeySequence::HelpContents, this, [] {
+        QDesktopServices::openUrl(QUrl(toQString(core::kHomepageUrl) + QStringLiteral("/wiki")));
+    });
+    help->addSeparator();
+    help->addAction(QStringLiteral("バージョン情報…"), this, [this] {
+        AboutDialog dialog(this);
+        dialog.exec();
     });
 }
 

@@ -1,6 +1,7 @@
 #include "StudioSettingsDialog.hpp"
 
 #include <QCheckBox>
+#include <QDir>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -83,7 +84,7 @@ app::PlayerSettings StudioSettingsDialog::result() const {
 app::PlayerSettings StudioSettingsDialog::load() {
     const auto settings = openStudioSettings();
     app::PlayerSettings player;
-    player.executable = toUtf8(settings->value(kExecutableKey).toString());
+    player.executable = toUtf8(QDir::toNativeSeparators(settings->value(kExecutableKey).toString()));
     player.commandTemplate = toUtf8(settings->value(kTemplateKey, toQString(player.commandTemplate)).toString());
     player.foldBgmColumns = settings->value(kFoldKey, true).toBool();
     player.renderTemplate = toUtf8(settings->value(kRenderKey, toQString(player.renderTemplate)).toString());
@@ -92,7 +93,7 @@ app::PlayerSettings StudioSettingsDialog::load() {
 
 void StudioSettingsDialog::save(const app::PlayerSettings& player) {
     const auto settings = openStudioSettings();
-    settings->setValue(kExecutableKey, toQString(player.executable));
+    settings->setValue(kExecutableKey, QDir::fromNativeSeparators(toQString(player.executable)));
     settings->setValue(kTemplateKey, toQString(player.commandTemplate));
     settings->setValue(kFoldKey, player.foldBgmColumns);
     settings->setValue(kRenderKey, toQString(player.renderTemplate));
