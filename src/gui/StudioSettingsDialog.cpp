@@ -1,5 +1,6 @@
 #include "StudioSettingsDialog.hpp"
 
+#include <QCheckBox>
 #include <QDialogButtonBox>
 #include <QFileDialog>
 #include <QFormLayout>
@@ -18,6 +19,7 @@ namespace {
 
 const QString kExecutableKey = QStringLiteral("preview/executable");
 const QString kTemplateKey = QStringLiteral("preview/commandTemplate");
+const QString kFoldKey = QStringLiteral("preview/foldBgmColumns");
 
 }  // namespace
 
@@ -47,6 +49,9 @@ StudioSettingsDialog::StudioSettingsDialog(const app::PlayerSettings& current, Q
                             this);
     help->setWordWrap(true);
     layout->addWidget(help);
+    foldBgmColumns_ = new QCheckBox(QStringLiteral("BGM 列（x が 9 以上）のノーツを BGM に戻して渡す（Pulsus はこれがあると落ちるため）"), this);
+    foldBgmColumns_->setChecked(current.foldBgmColumns);
+    layout->addWidget(foldBgmColumns_);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);
     layout->addWidget(buttons);
@@ -63,7 +68,8 @@ StudioSettingsDialog::StudioSettingsDialog(const app::PlayerSettings& current, Q
 }
 
 app::PlayerSettings StudioSettingsDialog::result() const {
-    return app::PlayerSettings{toUtf8(executable_->text().trimmed()), toUtf8(commandTemplate_->text().trimmed())};
+    return app::PlayerSettings{toUtf8(executable_->text().trimmed()), toUtf8(commandTemplate_->text().trimmed()),
+                               foldBgmColumns_->isChecked()};
 }
 
 app::PlayerSettings StudioSettingsDialog::load() {
@@ -71,6 +77,7 @@ app::PlayerSettings StudioSettingsDialog::load() {
     app::PlayerSettings player;
     player.executable = toUtf8(settings.value(kExecutableKey).toString());
     player.commandTemplate = toUtf8(settings.value(kTemplateKey, toQString(player.commandTemplate)).toString());
+    player.foldBgmColumns = settings.value(kFoldKey, true).toBool();
     return player;
 }
 
@@ -78,6 +85,7 @@ void StudioSettingsDialog::save(const app::PlayerSettings& player) {
     QSettings settings(QStringLiteral("IgusaBmsonStudio"), QStringLiteral("IgusaBmsonStudio"));
     settings.setValue(kExecutableKey, toQString(player.executable));
     settings.setValue(kTemplateKey, toQString(player.commandTemplate));
+    settings.setValue(kFoldKey, player.foldBgmColumns);
 }
 
 }  // namespace ibs::gui

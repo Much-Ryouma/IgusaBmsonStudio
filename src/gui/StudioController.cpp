@@ -273,9 +273,13 @@ app::PreviewOutcome StudioController::previewInPlayer() {
     if (!outcome.launched) {
         emit statusMessage(toQString(outcome.error));
     } else {
-        emit statusMessage(QStringLiteral("プレーヤーを起動しました: 小節 %1 から（%2）")
-                               .arg(app::previewPositionAt(document_.project(), cursorPulse_).measure)
-                               .arg(toQString(outcome.file.filename())));
+        QString message = QStringLiteral("プレーヤーを起動しました: 小節 %1 から（%2）")
+                              .arg(app::previewPositionAt(document_.project(), cursorPulse_).measure)
+                              .arg(toQString(outcome.file.filename()));
+        if (outcome.foldedBgmNotes > 0) {
+            message += QStringLiteral("。BGM 列のノーツ %1 個は BGM に戻して渡しました").arg(outcome.foldedBgmNotes);
+        }
+        emit statusMessage(message);
     }
     return outcome;
 }

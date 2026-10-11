@@ -1,6 +1,6 @@
 # 譜面の編集 (core/chart)
 
-- 対象: `assignLane` / `clearAssignment` / `cutPointsInSongOrder` / `copyPattern` / `pastePattern` / `mirroredLanes` / `swappedLanes` / `randomizedLanes` / `placementsDesyncedBy` / `keepCutTimesAfterTempoChange` / `playableNotesPerBar` / `recommendedTotal`
+- 対象: `assignLane` / `clearAssignment` / `cutPointsInSongOrder` / `copyPattern` / `pastePattern` / `mirroredLanes` / `swappedLanes` / `randomizedLanes` / `placementsDesyncedBy` / `keepCutTimesAfterTempoChange` / `foldBgmColumns` / `playableNotesPerBar` / `recommendedTotal`
 - テストコード: `tests/unit/core/chart/ChartEditingTest.cpp`
 - 根拠: SPEC.md §6.4（割当モード、コピー＆ペースト、変形、BPM を変えたときの切断点）
 - 共通の前提: 120 BPM・resolution 240。bass.wav と lead.wav をどちらも pulse 0 に配置。モードは beat-7k（鍵盤 1〜7、スクラッチ 8、BGM 列は 9 以上）
@@ -25,3 +25,4 @@ BPM・STOP を変えたときに、音とずれる配置を見つけ、時間を
 | CHE-008 | bass（0 に配置、960 に切断点）と、3840 に置いた bass（240 に切断点） | pulse 1920 から 60 BPM にする | ずれるのは 3840 の配置だけ（1920 より前で完結する配置は影響なし） |
 | CHE-009 | bass（0 に配置、960 に自動の切断点、影響ありの印） | 480 から 60 BPM にして「時間を保つ」 | 切断点が 720 に動く（配置の頭から 2.0 秒のまま）。自動のまま、印は消える |
 | CHE-010 | 240 にレーン 1 のレイヤーノーツ 2 つ、1200 にレーン 2、2000 にレーン 12（BGM 列） | 小節ごとのノーツ数 / ノーツ 1000 個の total の目安 | 1 小節目 1、2 小節目 1（レイヤーは 1 つ、BGM 列は数えない）/ 460.9 |
+| CHE-011 | レーン 3 のノーツ、レーン 12 とレーン 1 が重なった切断点、レーン 25 のノーツ | BGM 列を BGM に戻す | 12 と 25 の 2 つが消え（割当のない切断点は BGM として書き出される）、レーン 3 と 1 は残る |

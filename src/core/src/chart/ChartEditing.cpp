@@ -243,6 +243,21 @@ std::size_t keepCutTimesAfterTempoChange(Project& project, PlacementId placement
     return moved;
 }
 
+// Why not x はそのままにして x=0 のノーツを足す: 割当のない切断点はそれだけで BGM（x=0）として書き出されるので、
+// BGM 列のノーツを消すだけで、x が 9 以上を扱えないプレーヤーでも同じ音になる
+std::size_t foldBgmColumns(Project& project, const KeyMode& mode) {
+    std::vector<NoteId> folded;
+    for (const auto& note : project.notes()) {
+        if (!mode.isPlayable(note.lane)) {
+            folded.push_back(note.id);
+        }
+    }
+    for (const auto id : folded) {
+        project.removeNote(id);
+    }
+    return folded.size();
+}
+
 std::vector<std::size_t> playableNotesPerBar(const Project& project, const KeyMode& mode) {
     std::set<std::pair<int, Pulse>> positions;
     for (const auto& note : project.notes()) {

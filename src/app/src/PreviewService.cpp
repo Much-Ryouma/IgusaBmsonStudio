@@ -4,6 +4,7 @@
 #include <cstdio>
 #include <exception>
 
+#include "ibs/core/chart/ChartEditing.hpp"
 #include "ibs/core/timing/TimingEdits.hpp"
 #include "ibs/infra/fs/Utf8Path.hpp"
 
@@ -105,9 +106,15 @@ PreviewOutcome PreviewService::preview(const EditorDocument& document, core::Pul
             return outcome;
         }
         outcome.file = *document.path();
-        if (document.isDirty()) {
+        core::Project project = document.project();
+        // Why not BGM 列（x が 9 以上）をそのまま渡す: Pulsus は x が 0 以外のノーツをすべて鍵盤として扱い、
+        // レーンの配列の外を読んで落ちる（Pulsus 0.5.3、Skin.cs の laneWidths は 9 要素）ため、プレビュー用の一時ファイルでだけ BGM に戻す
+        if (const auto* mode = charts_.keyModeFor(project); mode != nullptr && settings.foldBgmColumns) {
+            outcome.foldedBgmNotes = core::foldBgmColumns(project, *mode);
+        }
+        if (document.isDirty() || outcome.foldedBgmNotes > 0) {
             outcome.file = previewFileFor(*document.path());
-            const auto exported = charts_.exportCopy(document.project(), outcome.file);
+            const auto exported = charts_.exportCopy(project, outcome.file);
             outcome.issues = exported.issues;
             if (!exported.saved) {
                 outcome.error = exported.error;

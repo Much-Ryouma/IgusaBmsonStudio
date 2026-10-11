@@ -48,6 +48,8 @@ PasteResult pastePattern(Project& project, const NotePattern& pattern, Pulse tar
 [[nodiscard]] std::vector<PlacementId> placementsDesyncedBy(const Project& project, const TimingData& before);
 std::size_t keepCutTimesAfterTempoChange(Project& project, PlacementId placementId, const TimingData& before);
 
+std::size_t foldBgmColumns(Project& project, const KeyMode& mode);
+
 [[nodiscard]] std::vector<std::size_t> playableNotesPerBar(const Project& project, const KeyMode& mode);
 [[nodiscard]] double recommendedTotal(std::size_t playableNotes);
 

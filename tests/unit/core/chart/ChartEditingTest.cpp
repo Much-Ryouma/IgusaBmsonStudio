@@ -170,5 +170,21 @@ TEST(ChartEditing, CHE010_CountsPlayableNotesPerBarAndRecommendsTotal) {
     EXPECT_NEAR(recommendedTotal(1000), 460.9, 0.1);
 }
 
+TEST(ChartEditing, CHE011_FoldingBgmColumnsLeavesOnlyPlayableNotes) {
+    Song song;
+    const KeyMode mode = ibs::testing::beat7k();
+    const auto playable = song.project.addNote(song.cut(song.bassPlacement, 240), 3, 0);
+    const auto layeredCut = song.cut(song.bassPlacement, 480);
+    song.project.addNote(layeredCut, 12, 0);
+    const auto layeredKey = song.project.addNote(layeredCut, 1, 0);
+    song.project.addNote(song.cut(song.leadPlacement, 720), 25, 0);
+
+    EXPECT_EQ(foldBgmColumns(song.project, mode), 2u);
+
+    EXPECT_EQ(song.project.notes().size(), 2u);
+    EXPECT_TRUE(song.project.containsNote(playable));
+    EXPECT_TRUE(song.project.containsNote(layeredKey));
+}
+
 }  // namespace
 }  // namespace ibs::core

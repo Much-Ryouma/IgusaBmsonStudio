@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include "ibs/app/PreviewService.hpp"
+#include "../support/Beat7k.hpp"
 #include "ibs/infra/fs/Utf8Path.hpp"
 
 namespace ibs::app {
@@ -9,7 +10,11 @@ namespace {
 class RecordingStorage final : public ChartStorage {
 public:
     infra::BmsonParseResult load(const std::filesystem::path&) override { return {}; }
-    void save(const std::filesystem::path& path, const core::bmson::Document&) override { savedPaths.push_back(path); }
+    void save(const std::filesystem::path& path, const core::bmson::Document& document) override {
+        savedPaths.push_back(path);
+        savedDocuments.push_back(document);
+    }
+    std::vector<core::bmson::Document> savedDocuments;
     std::unique_ptr<core::FileSystemPort> fileSystemAt(const std::filesystem::path&) override { return nullptr; }
 
     std::vector<std::filesystem::path> savedPaths;
@@ -90,6 +95,34 @@ TEST(PreviewService, PRV005_ExplainsWhyItCannotLaunch) {
     const auto failed = service.preview(saved, 0, PlayerSettings{"Pulsus.exe"});
     EXPECT_FALSE(failed.launched);
     EXPECT_NE(failed.error.find("Pulsus.exe"), std::string::npos);
+}
+
+TEST(PreviewService, PRV006_BgmColumnsAreFoldedIntoBgmForThePlayer) {
+    RecordingStorage storage;
+    RecordingLauncher launcher;
+    core::KeyModeCatalog modes;
+    modes.add(ibs::testing::beat7k());
+    const ChartService charts(storage, std::move(modes));
+    PreviewService service(charts, launcher);
+    core::Project project;
+    const auto placement = project.addPlacement(project.addAsset("a.wav"), 0, 0);
+    project.addNote(project.addCutPoint(placement, 240, core::CutOrigin::Auto), 12, 0);
+    project.addNote(project.addCutPoint(placement, 480, core::CutOrigin::Auto), 2, 0);
+    EditorDocument document(std::move(project), std::filesystem::path("song") / "song.bmson");
+
+    const auto folded = service.preview(document, 0, PlayerSettings{"Pulsus.exe"});
+    PlayerSettings keep{"Pulsus.exe"};
+    keep.foldBgmColumns = false;
+    const auto kept = service.preview(document, 0, keep);
+
+    EXPECT_EQ(folded.foldedBgmNotes, 1u);
+    EXPECT_EQ(folded.file, std::filesystem::path("song") / ".~preview_song.bmson");
+    ASSERT_EQ(storage.savedDocuments.size(), 1u);
+    for (const auto& note : storage.savedDocuments.front().soundChannels.front().notes) {
+        EXPECT_LT(note.x, 9);
+    }
+    EXPECT_EQ(document.project().notes().size(), 2u);
+    EXPECT_EQ(kept.file, std::filesystem::path("song") / "song.bmson");
 }
 
 }  // namespace

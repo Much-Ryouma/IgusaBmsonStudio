@@ -12,6 +12,7 @@ namespace ibs::app {
 struct PlayerSettings {
     std::string executable;
     std::string commandTemplate = R"("{exe}" "{file}" -p -m {measure})";
+    bool foldBgmColumns = true;
 };
 
 struct LaunchRequest {
@@ -36,6 +37,7 @@ struct PreviewPosition {
 struct PreviewOutcome {
     bool launched = false;
     std::filesystem::path file;
+    std::size_t foldedBgmNotes = 0;
     LaunchRequest request;
     std::vector<core::Issue> issues;
     std::string error;

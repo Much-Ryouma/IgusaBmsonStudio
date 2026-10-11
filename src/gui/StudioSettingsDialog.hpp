@@ -4,6 +4,7 @@
 
 #include "ibs/app/PreviewService.hpp"
 
+class QCheckBox;
 class QLineEdit;
 
 namespace ibs::gui {
@@ -22,6 +23,7 @@ public:
 private:
     QLineEdit* executable_ = nullptr;
     QLineEdit* commandTemplate_ = nullptr;
+    QCheckBox* foldBgmColumns_ = nullptr;
 };
 
 }  // namespace ibs::gui
