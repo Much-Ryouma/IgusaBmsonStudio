@@ -35,6 +35,8 @@ bool containsPlacement(const core::Project& project, core::PlacementId id) {
 StudioController::StudioController(StudioPorts ports, QObject* parent)
     : QObject(parent),
       storage_(ports.storage),
+      audioSource_(ports.audioSource),
+      runner_(ports.runner),
       output_(ports.output),
       charts_(ports.storage, std::move(ports.modes)),
       library_(ports.storage, ports.audioSource),
@@ -209,8 +211,10 @@ void StudioController::setSelectedCuts(std::vector<core::CutPointId> cuts) {
     emit selectionChanged();
 }
 
+// Why not 譜面で選んだ切断点の配置を必ず波形に出す: 譜面を打つ作業中に下の波形が毎回切り替わるのを嫌う人もいるため、
+// 「クリックしたスライスを波形に表示」を切れるようにし、切ったときは選択だけを変える
 void StudioController::focusCuts(std::vector<core::CutPointId> cuts) {
-    if (!cuts.empty()) {
+    if (!cuts.empty() && followChartSelection_) {
         const auto placement = document_.project().cutPoint(cuts.front()).placementId;
         if (placement != selectedPlacement_) {
             selectedPlacement_ = placement;
@@ -223,6 +227,9 @@ void StudioController::focusCuts(std::vector<core::CutPointId> cuts) {
     }
     selectedCuts_ = std::move(cuts);
     emit selectionChanged();
+    if (!selectedCuts_.empty() && followChartSelection_) {
+        emit cutFocusRequested(selectedCuts_.front());
+    }
 }
 
 void StudioController::setSelectedNotes(std::vector<core::NoteId> notes) {
@@ -282,6 +289,71 @@ app::PreviewOutcome StudioController::previewInPlayer() {
         emit statusMessage(message);
     }
     return outcome;
+}
+
+// Why not GUI スレッドで計算する: 素材をすべて鳴らし直して音量を測るため、数分の曲では数秒かかり、その間画面が止まる
+void StudioController::requestStatistics() {
+    const auto* mode = keyMode();
+    if (mode == nullptr) {
+        emit statisticsFailed(QStringLiteral("mode_hint のモード定義がないため、統計を出せません"));
+        return;
+    }
+    QPointer<StudioController> self(this);
+    runInPool(pool_, [this, self, project = document_.project(), mode = *mode] {
+        std::map<std::string, std::shared_ptr<const app::LoadedAudio>> keep;
+        std::map<std::string, const core::AudioBuffer*> audio;
+        for (const auto& asset : project.assets()) {
+            if (auto loaded = library_.get(asset.name).audio) {
+                audio.emplace(asset.name, &loaded->audio);
+                keep.emplace(asset.name, std::move(loaded));
+            }
+        }
+        try {
+            auto report = app::computeChartStatistics(project, mode, audio);
+            QMetaObject::invokeMethod(this, [self, report = std::move(report)] {
+                if (self) {
+                    emit self->statisticsReady(report);
+                }
+            }, Qt::QueuedConnection);
+        } catch (const std::exception& error) {
+            const QString reason = toQString(error.what());
+            QMetaObject::invokeMethod(this, [self, reason] {
+                if (self) {
+                    emit self->statisticsFailed(reason);
+                }
+            }, Qt::QueuedConnection);
+        }
+    });
+}
+
+// Why not 読み込み済みの素材を使う: ヌルテストは保存した譜面がどう鳴るかを確かめるもので、
+// 編集中にまだ保存していない素材の差し替えを混ぜないよう、譜面の隣にあるファイルを読み直す
+void StudioController::requestNullTest(NullTestSource source) {
+    if (!document_.path()) {
+        emit nullTestFailed(QStringLiteral("ヌルテストの前に譜面を保存してください"));
+        return;
+    }
+    if (source == NullTestSource::ExternalPlayer && playerSettings_.executable.empty()) {
+        emit nullTestFailed(QStringLiteral("設定でプレーヤーの実行ファイルを指定してください"));
+        return;
+    }
+    QPointer<StudioController> self(this);
+    runInPool(pool_, [this, self, source, project = document_.project(), path = *document_.path(), player = playerSettings_] {
+        const app::NullTestService service(charts_, storage_, audioSource_);
+        auto report = source == NullTestSource::InternalPlayer
+                          ? service.compareWithInternalPlayer(project, path.parent_path())
+                          : service.compareWithPlayer(project, path, player, player.renderTemplate, runner_);
+        QMetaObject::invokeMethod(this, [self, report = std::move(report)] {
+            if (!self) {
+                return;
+            }
+            if (report.completed) {
+                emit self->nullTestReady(report);
+            } else {
+                emit self->nullTestFailed(toQString(report.error));
+            }
+        }, Qt::QueuedConnection);
+    });
 }
 
 void StudioController::selectBgaImage(std::optional<std::uint32_t> id) {
@@ -435,8 +507,9 @@ app::SliceOutcome StudioController::applyPreview() {
     return outcome;
 }
 
-void StudioController::reportPlayback(const app::PlaybackOutcome& outcome) {
+void StudioController::reportPlayback(const app::PlaybackOutcome& outcome, bool wholeSong) {
     if (outcome.started) {
+        playingWholeSong_ = wholeSong;
         playheadTimer_.start();
     } else if (!outcome.error.empty()) {
         emit statusMessage(toQString(outcome.error));
@@ -444,14 +517,14 @@ void StudioController::reportPlayback(const app::PlaybackOutcome& outcome) {
     emit playheadChanged();
 }
 
-void StudioController::playSlice(core::CutPointId cut) { reportPlayback(playback_.playSlice(document_.project(), cut)); }
+void StudioController::playSlice(core::CutPointId cut) { reportPlayback(playback_.playSlice(document_.project(), cut), false); }
 
 void StudioController::playPlacement(core::PlacementId placement) {
-    reportPlayback(playback_.playPlacement(document_.project(), placement));
+    reportPlayback(playback_.playPlacement(document_.project(), placement), false);
 }
 
 void StudioController::playSongFromCursor() {
-    reportPlayback(playback_.playSong(document_.project(), cursorPulse_, mix_));
+    reportPlayback(playback_.playSong(document_.project(), cursorPulse_, mix_), true);
 }
 
 void StudioController::stopPlayback() {
@@ -468,6 +541,12 @@ std::optional<double> StudioController::playheadPulse() const {
         return std::nullopt;
     }
     return document_.project().timing.toTimingMap().pulseAt(*seconds);
+}
+
+// Why not 試聴でもアレンジャーと譜面に再生位置を出す: スライスの試聴は波形を見ながら行うもので、
+// そのたびに上の画面の再生位置やスクロールまで動くと、編集中の場所を見失うため
+std::optional<double> StudioController::songPlayheadPulse() const {
+    return playingWholeSong_ ? playheadPulse() : std::nullopt;
 }
 
 }  // namespace ibs::gui

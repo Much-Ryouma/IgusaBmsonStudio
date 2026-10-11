@@ -15,13 +15,19 @@ add_library(ibs_gui STATIC
     SlicerPanel.cpp
     SlicerPanel.hpp
     SongSettingsDialog.cpp
+    NullTestDialog.cpp
+    NullTestDialog.hpp
+    StatisticsDialog.cpp
+    StatisticsDialog.hpp
     SongSettingsDialog.hpp
     StudioSettingsDialog.cpp
     StudioSettingsDialog.hpp
+    StudioSettings.hpp
     StudioController.cpp
     StudioController.hpp
     StudioPalette.hpp
     TimelineMath.hpp
+    TimelineScrollBar.hpp
     WaveformSlicerWidget.cpp
     WaveformSlicerWidget.hpp)
 add_library(ibs::gui ALIAS ibs_gui)

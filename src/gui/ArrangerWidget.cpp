@@ -43,7 +43,13 @@ ArrangerWidget::ArrangerWidget(StudioController& controller, QWidget* parent)
     const auto refresh = [this] { update(); };
     connect(&controller_, &StudioController::documentChanged, this, refresh);
     connect(&controller_, &StudioController::selectionChanged, this, refresh);
-    connect(&controller_, &StudioController::playheadChanged, this, refresh);
+    connect(&controller_, &StudioController::playheadChanged, this, [this] {
+        const auto playhead = controller_.songPlayheadPulse();
+        if (playhead && controller_.followsPlayback() && controller_.isPlaying()) {
+            viewport_.follow(*playhead, timelineWidthPixels());
+        }
+        update();
+    });
     connect(&controller_, &StudioController::cursorChanged, this, refresh);
     connect(&controller_, &StudioController::mixChanged, this, refresh);
 }
@@ -98,6 +104,15 @@ std::optional<core::PlacementId> ArrangerWidget::placementAt(QPointF point) cons
     return std::nullopt;
 }
 
+double ArrangerWidget::contentEndPulse() const {
+    const auto& project = controller_.project();
+    core::Pulse end = static_cast<core::Pulse>(project.timing.resolution) * 16;
+    for (const auto& placement : project.placements()) {
+        end = std::max(end, placementEnd(placement));
+    }
+    return static_cast<double>(end + static_cast<core::Pulse>(project.timing.resolution) * 8);
+}
+
 void ArrangerWidget::zoomToFit() {
     const auto& project = controller_.project();
     core::Pulse end = static_cast<core::Pulse>(project.timing.resolution) * 16;
@@ -119,12 +134,15 @@ void ArrangerWidget::paintEvent(QPaintEvent*) {
     if (cursorX >= kHeaderWidth) {
         painter.drawLine(QPointF(cursorX, 0), QPointF(cursorX, height()));
     }
-    if (const auto playhead = controller_.playheadPulse()) {
+    if (const auto playhead = controller_.songPlayheadPulse()) {
         const double x = timelineX(*playhead);
         if (x >= kHeaderWidth) {
             painter.setPen(QPen(palette::kPlayhead, 1.5));
             painter.drawLine(QPointF(x, 0), QPointF(x, height()));
         }
+    }
+    if (viewObserver_) {
+        viewObserver_();
     }
 }
 

@@ -9,10 +9,13 @@
 
 namespace ibs::app {
 
+inline constexpr const char* kDefaultRenderTemplate = R"("{exe}" "{file}" --render "{output}")";
+
 struct PlayerSettings {
     std::string executable;
     std::string commandTemplate = R"("{exe}" "{file}" -p -m {measure})";
     bool foldBgmColumns = true;
+    std::string renderTemplate = kDefaultRenderTemplate;
 };
 
 struct LaunchRequest {

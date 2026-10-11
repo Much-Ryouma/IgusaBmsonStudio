@@ -27,8 +27,12 @@ struct CommandResult {
 
 void printIssues(const std::vector<core::Issue>& issues);
 
+[[nodiscard]] std::string formatClock(double seconds);
+
 void registerChartCommands(CLI::App& app, CommonOptions& options, CommandResult& result);
 void registerSliceCommand(CLI::App& app, CommonOptions& options, CommandResult& result);
 void registerMidiCommand(CLI::App& app, CommonOptions& options, CommandResult& result);
+void registerNullTestCommand(CLI::App& app, CommonOptions& options, CommandResult& result);
+void registerStatsCommand(CLI::App& app, CommonOptions& options, CommandResult& result);
 
 }  // namespace ibs::cli

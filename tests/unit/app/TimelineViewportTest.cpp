@@ -62,5 +62,17 @@ TEST(TimelineViewport, VPT005_FitShowsTheWholeRange) {
     EXPECT_DOUBLE_EQ(viewport.xOf(2880.0), 960.0);
 }
 
+TEST(TimelineViewport, VPT006_FollowTurnsThePageOnlyNearTheEdge) {
+    TimelineViewport viewport(2.0);
+    viewport.setOrigin(960.0);
+
+    EXPECT_FALSE(viewport.follow(1500.0, 500.0));
+    EXPECT_DOUBLE_EQ(viewport.originPulse(), 960.0);
+    EXPECT_TRUE(viewport.follow(1920.0, 500.0));
+    EXPECT_DOUBLE_EQ(viewport.originPulse(), 1870.0);
+    EXPECT_TRUE(viewport.follow(100.0, 500.0));
+    EXPECT_DOUBLE_EQ(viewport.originPulse(), 50.0);
+}
+
 }  // namespace
 }  // namespace ibs::app

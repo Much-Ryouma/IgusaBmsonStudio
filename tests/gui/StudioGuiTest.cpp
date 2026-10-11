@@ -1,12 +1,15 @@
 #include <QAction>
 #include <QLabel>
+#include <QMenu>
 #include <QPushButton>
 #include <QSlider>
 #include <QTest>
 
 #include <gtest/gtest.h>
 
+#include "ArrangerWidget.hpp"
 #include "GuiFixture.hpp"
+#include "StudioSettings.hpp"
 #include "SlicerPanel.hpp"
 
 namespace ibs::gui::testing {
@@ -138,6 +141,57 @@ TEST(StudioGui, GUI007_ClickingASliceAuditionsOnlyThatSlice) {
     EXPECT_EQ(fixture.project().absolutePulseOf(fixture.project().cutPoint(fixture.controller().selectedCuts().front())), 1440);
     QTest::keyClick(fixture.window().slicer(), Qt::Key_Space);
     EXPECT_FALSE(fixture.output().playing);
+}
+
+TEST(StudioGui, GUI023_ArrangerTurnsThePageWhilePlayingUnlessTurnedOff) {
+    GuiFixture fixture;
+    auto& viewport = fixture.window().arranger()->viewport();
+    viewport.setPulsesPerPixel(1.0);
+    viewport.setOrigin(0.0);
+    fixture.controller().setCursorPulse(0);
+    fixture.controller().setFollowsPlayback(false);
+    fixture.controller().playSongFromCursor();
+    fixture.output().position = 3000;
+
+    emit fixture.controller().playheadChanged();
+    EXPECT_DOUBLE_EQ(viewport.originPulse(), 0.0);
+
+    fixture.controller().setFollowsPlayback(true);
+    emit fixture.controller().playheadChanged();
+    EXPECT_GT(viewport.originPulse(), 1000.0);
+    EXPECT_LT(viewport.originPulse(), 1440.0);
+}
+
+TEST(StudioGui, GUI024_RecentFilesMenuListsTheNewestFirst) {
+    GuiFixture fixture;
+    openStudioSettings()->setValue(QStringLiteral("file/recentFiles"), QStringList{QStringLiteral("b.bmson"), QStringLiteral("a.bmson")});
+
+    emit fixture.window().recentMenu()->aboutToShow();
+
+    const auto actions = fixture.window().recentMenu()->actions();
+    ASSERT_EQ(actions.size(), 2);
+    EXPECT_EQ(actions.front()->text(), QStringLiteral("b.bmson"));
+    EXPECT_TRUE(fixture.window().recentMenu()->isEnabled());
+    openStudioSettings()->remove(QStringLiteral("file/recentFiles"));
+}
+
+TEST(StudioGui, GUI025_AuditioningASliceMovesOnlyTheWaveformPlayhead) {
+    GuiFixture fixture;
+    auto& viewport = fixture.window().arranger()->viewport();
+    viewport.setPulsesPerPixel(1.0);
+    viewport.setOrigin(0.0);
+    fixture.controller().setFollowsPlayback(true);
+
+    fixture.controller().playSlice(fixture.project().headCutPointOf(fixture.placement));
+    fixture.output().position = 3000;
+    emit fixture.controller().playheadChanged();
+
+    EXPECT_TRUE(fixture.controller().playheadPulse().has_value());
+    EXPECT_FALSE(fixture.controller().songPlayheadPulse().has_value());
+    EXPECT_DOUBLE_EQ(viewport.originPulse(), 0.0);
+
+    fixture.controller().playSongFromCursor();
+    EXPECT_TRUE(fixture.controller().songPlayheadPulse().has_value());
 }
 
 }  // namespace

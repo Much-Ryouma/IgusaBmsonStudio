@@ -28,6 +28,8 @@ int main(int argc, char** argv) {
     ibs::cli::registerChartCommands(app, options, result);
     ibs::cli::registerSliceCommand(app, options, result);
     ibs::cli::registerMidiCommand(app, options, result);
+    ibs::cli::registerNullTestCommand(app, options, result);
+    ibs::cli::registerStatsCommand(app, options, result);
 
     try {
         app.parse(argc, argv);

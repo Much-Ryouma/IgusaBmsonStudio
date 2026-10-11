@@ -56,7 +56,13 @@ ChartEditorWidget::ChartEditorWidget(StudioController& controller, QWidget* pare
     const auto refresh = [this] { update(); };
     connect(&controller_, &StudioController::documentChanged, this, refresh);
     connect(&controller_, &StudioController::selectionChanged, this, refresh);
-    connect(&controller_, &StudioController::playheadChanged, this, refresh);
+    connect(&controller_, &StudioController::playheadChanged, this, [this] {
+        const auto playhead = controller_.songPlayheadPulse();
+        if (playhead && controller_.followsPlayback() && controller_.isPlaying()) {
+            viewport_.follow(*playhead, timelineHeight());
+        }
+        update();
+    });
     connect(&controller_, &StudioController::cursorChanged, this, refresh);
 }
 
@@ -263,7 +269,7 @@ void ChartEditorWidget::paintEvent(QPaintEvent*) {
     const double cursorY = yOf(static_cast<double>(controller_.cursorPulse()));
     painter.setPen(QPen(palette::kCursor, 1.0));
     painter.drawLine(QPointF(kRulerWidth, cursorY), QPointF(width() - kDensityWidth, cursorY));
-    if (const auto playhead = controller_.playheadPulse()) {
+    if (const auto playhead = controller_.songPlayheadPulse()) {
         painter.setPen(QPen(palette::kPlayhead, 1.5));
         const double y = yOf(*playhead);
         painter.drawLine(QPointF(kRulerWidth, y), QPointF(width() - kDensityWidth, y));

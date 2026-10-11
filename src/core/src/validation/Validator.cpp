@@ -124,6 +124,30 @@ void checkNotes(const Project& project, const KeyMode* keyMode, std::vector<Issu
     }
 }
 
+void checkSharedSlices(const Project& project, const KeyMode* keyMode, std::vector<Issue>& issues) {
+    std::map<std::uint64_t, std::vector<int>> lanesByCut;
+    for (const auto& note : project.notes()) {
+        const bool playable = keyMode != nullptr ? keyMode->isPlayable(note.lane) : note.lane > kBgmLane;
+        if (playable) {
+            lanesByCut[note.cutPointId.value].push_back(note.lane);
+        }
+    }
+    for (const auto& [cutValue, lanes] : lanesByCut) {
+        if (lanes.size() < 2) {
+            continue;
+        }
+        const auto& cut = project.cutPoint(CutPointId{cutValue});
+        std::string laneText;
+        for (const int lane : lanes) {
+            laneText += (laneText.empty() ? "" : ", ") + std::to_string(lane);
+        }
+        issues.push_back({Severity::Warning, "V15",
+                          "'" + project.asset(project.placement(cut.placementId).assetId).name + "' の y=" +
+                              std::to_string(project.absolutePulseOf(cut)) + " のスライスが複数のレーン（" + laneText +
+                              "）に割り当てられています。同時に押すと音が重なり、Pulsus では音切りの区切りが崩れます"});
+    }
+}
+
 }  // namespace
 
 std::size_t countPlayableNotes(const Project& project, const KeyMode& keyMode) {
@@ -140,6 +164,7 @@ std::vector<Issue> validateProject(const Project& project, const ValidationConte
     checkTiming(project, issues);
     checkFiles(project, context.fileSystem, issues);
     checkNotes(project, context.keyMode, issues);
+    checkSharedSlices(project, context.keyMode, issues);
     if (context.bannerImageSize && context.bannerImageSize->width * 4 != context.bannerImageSize->height * 15) {
         issues.push_back({Severity::Warning, "V10",
                           "banner_image が 15:4 ではありません（" + std::to_string(context.bannerImageSize->width) + "×" +

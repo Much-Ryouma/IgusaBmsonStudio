@@ -15,8 +15,10 @@
 #include "ibs/app/AssetImportService.hpp"
 #include "ibs/app/AudioLibrary.hpp"
 #include "ibs/app/ChartCommands.hpp"
+#include "ibs/app/ChartStatisticsService.hpp"
 #include "ibs/app/ChartService.hpp"
 #include "ibs/app/EditorDocument.hpp"
+#include "ibs/app/NullTestService.hpp"
 #include "ibs/app/PlaybackService.hpp"
 #include "ibs/app/PreviewService.hpp"
 #include "ibs/core/model/BgaEditing.hpp"
@@ -32,7 +34,10 @@ struct StudioPorts {
     app::AssetFileStore& assetFiles;
     core::KeyModeCatalog modes;
     app::ProcessLauncher& launcher;
+    app::ProcessRunner& runner;
 };
+
+enum class NullTestSource { InternalPlayer, ExternalPlayer };
 
 struct BgaEventRef {
     core::BgaTrack track = core::BgaTrack::Bga;
@@ -75,6 +80,10 @@ public:
     [[nodiscard]] const std::vector<core::CutPointId>& selectedCuts() const noexcept { return selectedCuts_; }
     void setSelectedCuts(std::vector<core::CutPointId> cuts);
     void focusCuts(std::vector<core::CutPointId> cuts);
+    [[nodiscard]] bool followsChartSelection() const noexcept { return followChartSelection_; }
+    void setFollowsChartSelection(bool enabled) { followChartSelection_ = enabled; }
+    [[nodiscard]] bool followsPlayback() const noexcept { return followPlayback_; }
+    void setFollowsPlayback(bool enabled) { followPlayback_ = enabled; }
     [[nodiscard]] const std::vector<core::NoteId>& selectedNotes() const noexcept { return selectedNotes_; }
     void setSelectedNotes(std::vector<core::NoteId> notes);
 
@@ -86,6 +95,8 @@ public:
     [[nodiscard]] const app::PlayerSettings& playerSettings() const noexcept { return playerSettings_; }
     void setPlayerSettings(app::PlayerSettings settings) { playerSettings_ = std::move(settings); }
     app::PreviewOutcome previewInPlayer();
+    void requestStatistics();
+    void requestNullTest(NullTestSource source);
 
     [[nodiscard]] std::optional<std::uint32_t> selectedBgaImage() const noexcept { return selectedBgaImage_; }
     void selectBgaImage(std::optional<std::uint32_t> id);
@@ -119,6 +130,7 @@ public:
     void stopPlayback();
     [[nodiscard]] bool isPlaying() const;
     [[nodiscard]] std::optional<double> playheadPulse() const;
+    [[nodiscard]] std::optional<double> songPlayheadPulse() const;
 
     void waitForBackgroundWork();
 
@@ -133,15 +145,22 @@ signals:
     void analysisStateChanged(bool analyzing);
     void statusMessage(const QString& message);
     void tempoDesynced(const app::TimingEditOutcome& outcome);
+    void cutFocusRequested(core::CutPointId cut);
+    void statisticsReady(const app::ChartStatisticsReport& report);
+    void statisticsFailed(const QString& reason);
+    void nullTestReady(const app::NullTestReport& report);
+    void nullTestFailed(const QString& reason);
 
 private:
     void onDocumentChanged();
     void resetForNewDocument();
     void preloadAudio();
     void refreshPreviewFromCache();
-    void reportPlayback(const app::PlaybackOutcome& outcome);
+    void reportPlayback(const app::PlaybackOutcome& outcome, bool wholeSong);
 
     app::ChartStorage& storage_;
+    app::AudioSource& audioSource_;
+    app::ProcessRunner& runner_;
     core::AudioOutputPort& output_;
     app::ChartService charts_;
     app::EditorDocument document_;
@@ -161,6 +180,9 @@ private:
     int snapDivisions_ = 16;
     core::Pulse cursorPulse_ = 0;
     bool autoPreview_ = true;
+    bool followChartSelection_ = true;
+    bool followPlayback_ = true;
+    bool playingWholeSong_ = false;
     bool analyzing_ = false;
     std::uint64_t analysisGeneration_ = 0;
     std::uint64_t documentGeneration_ = 0;

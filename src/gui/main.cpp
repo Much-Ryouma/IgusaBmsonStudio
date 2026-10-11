@@ -28,8 +28,9 @@ int main(int argc, char** argv) {
     }
 
     ibs::gui::QtProcessLauncher launcher;
+    ibs::app::LocalProcessRunner runner;
     ibs::gui::StudioController controller(
-        ibs::gui::StudioPorts{storage, audioSource, output, assetFiles, std::move(modes), launcher});
+        ibs::gui::StudioPorts{storage, audioSource, output, assetFiles, std::move(modes), launcher, runner});
     ibs::gui::MainWindow window(controller);
     window.show();
 

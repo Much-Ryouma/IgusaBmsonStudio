@@ -9,10 +9,18 @@ namespace ibs::core {
 
 namespace {
 
+// Why not 先頭から順に探す: 1 万ノーツ規模の譜面で描画や編集のたびに何度も引くため線形探索が効いてくる。
+// id は単調に増える番号で末尾に追加し、削除しても順序は崩れないので、二分探索で引ける
+template <class Container, class IdType>
+auto locate(Container& entities, IdType id) {
+    const auto found = std::lower_bound(entities.begin(), entities.end(), id,
+                                        [](const auto& entity, IdType value) { return entity.id.value < value.value; });
+    return found != entities.end() && found->id == id ? found : entities.end();
+}
+
 template <class Entity, class IdType>
 const Entity& findById(const std::vector<Entity>& entities, IdType id, const char* kind) {
-    const auto found =
-        std::find_if(entities.begin(), entities.end(), [id](const Entity& entity) { return entity.id == id; });
+    const auto found = locate(entities, id);
     if (found == entities.end()) {
         throw std::invalid_argument(std::string(kind) + " not found: id=" + std::to_string(id.value));
     }
@@ -102,24 +110,18 @@ void Project::retimeCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
     if (occupied) {
         throw std::invalid_argument("cut point already exists at offset " + std::to_string(newOffsetPulses));
     }
-    std::find_if(cutPoints_.begin(), cutPoints_.end(), [cutPointId](const CutPoint& existing) {
-        return existing.id == cutPointId;
-    })->offsetPulses = newOffsetPulses;
+    locate(cutPoints_, cutPointId)->offsetPulses = newOffsetPulses;
 }
 
 void Project::setCutOrigin(CutPointId cutPointId, CutOrigin origin) {
     static_cast<void>(cutPoint(cutPointId));
-    std::find_if(cutPoints_.begin(), cutPoints_.end(), [cutPointId](const CutPoint& existing) {
-        return existing.id == cutPointId;
-    })->origin = origin;
+    locate(cutPoints_, cutPointId)->origin = origin;
 }
 
 void Project::moveCutPoint(CutPointId cutPointId, Pulse newOffsetPulses) {
     retimeCutPoint(cutPointId, newOffsetPulses);
     // Why not 自動検出の印のまま残す: 手で動かした切断点を再検出で消されないよう、手動の切断点として扱う
-    std::find_if(cutPoints_.begin(), cutPoints_.end(), [cutPointId](const CutPoint& existing) {
-        return existing.id == cutPointId;
-    })->origin = CutOrigin::Manual;
+    locate(cutPoints_, cutPointId)->origin = CutOrigin::Manual;
 }
 
 void Project::movePlacement(PlacementId placementId, Pulse newStartPulse) {
@@ -127,8 +129,7 @@ void Project::movePlacement(PlacementId placementId, Pulse newStartPulse) {
     if (newStartPulse < 0) {
         throw std::invalid_argument("placement start must not be negative");
     }
-    auto& target = *std::find_if(placements_.begin(), placements_.end(),
-                                 [placementId](const Placement& existing) { return existing.id == placementId; });
+    auto& target = *locate(placements_, placementId);
     target.startPulse = newStartPulse;
 }
 
@@ -145,7 +146,7 @@ void Project::removePlacement(PlacementId placementId) {
 
 void Project::removeNote(NoteId noteId) {
     static_cast<void>(note(noteId));
-    std::erase_if(notes_, [noteId](const Note& existing) { return existing.id == noteId; });
+    notes_.erase(locate(notes_, noteId));
 }
 
 void Project::setNoteLength(NoteId noteId, Pulse lengthPulses) {
@@ -153,8 +154,7 @@ void Project::setNoteLength(NoteId noteId, Pulse lengthPulses) {
     if (lengthPulses < 0) {
         throw std::invalid_argument("note length must not be negative");
     }
-    std::find_if(notes_.begin(), notes_.end(), [noteId](const Note& existing) { return existing.id == noteId; })
-        ->lengthPulses = lengthPulses;
+    locate(notes_, noteId)->lengthPulses = lengthPulses;
 }
 
 // Why not 1 つずつ setNoteLane で変える: ミラーやレーンの入れ替えでは、途中の状態で同じ切断点の同じレーンに
@@ -166,8 +166,7 @@ void Project::remapNoteLanes(const std::map<NoteId, int>& lanes) {
         if (lane <= kBgmLane) {
             throw std::invalid_argument("note lane must be positive; remove the note to play the slice as BGM");
         }
-        std::find_if(remapped.begin(), remapped.end(), [id = id](const Note& existing) { return existing.id == id; })
-            ->lane = lane;
+        locate(remapped, id)->lane = lane;
     }
     std::set<std::pair<CutPointId, int>> occupied;
     for (const auto& note : remapped) {
@@ -213,11 +212,11 @@ const CutPoint& Project::cutPoint(CutPointId id) const { return findById(cutPoin
 const Note& Project::note(NoteId id) const { return findById(notes_, id, "note"); }
 
 bool Project::containsCutPoint(CutPointId id) const {
-    return std::any_of(cutPoints_.begin(), cutPoints_.end(), [id](const CutPoint& cut) { return cut.id == id; });
+    return locate(cutPoints_, id) != cutPoints_.end();
 }
 
 bool Project::containsNote(NoteId id) const {
-    return std::any_of(notes_.begin(), notes_.end(), [id](const Note& existing) { return existing.id == id; });
+    return locate(notes_, id) != notes_.end();
 }
 
 std::vector<NoteId> Project::notesOf(CutPointId cutPointId) const {

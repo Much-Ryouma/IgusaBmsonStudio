@@ -8,10 +8,10 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QPushButton>
-#include <QSettings>
 #include <QVBoxLayout>
 
 #include "QtText.hpp"
+#include "StudioSettings.hpp"
 
 namespace ibs::gui {
 
@@ -20,6 +20,7 @@ namespace {
 const QString kExecutableKey = QStringLiteral("preview/executable");
 const QString kTemplateKey = QStringLiteral("preview/commandTemplate");
 const QString kFoldKey = QStringLiteral("preview/foldBgmColumns");
+const QString kRenderKey = QStringLiteral("preview/renderTemplate");
 
 }  // namespace
 
@@ -49,6 +50,13 @@ StudioSettingsDialog::StudioSettingsDialog(const app::PlayerSettings& current, Q
                             this);
     help->setWordWrap(true);
     layout->addWidget(help);
+    auto* renderForm = new QFormLayout;
+    layout->addLayout(renderForm);
+    renderTemplate_ = new QLineEdit(toQString(current.renderTemplate), this);
+    renderForm->addRow(QStringLiteral("書き出しコマンド"), renderTemplate_);
+    auto* renderHelp = new QLabel(QStringLiteral("ヌルテストで使います。置換子: {exe} {file} {output}（書き出す wav）"), this);
+    renderHelp->setWordWrap(true);
+    layout->addWidget(renderHelp);
     foldBgmColumns_ = new QCheckBox(QStringLiteral("BGM 列（x が 9 以上）のノーツを BGM に戻して渡す（Pulsus はこれがあると落ちるため）"), this);
     foldBgmColumns_->setChecked(current.foldBgmColumns);
     layout->addWidget(foldBgmColumns_);
@@ -69,23 +77,25 @@ StudioSettingsDialog::StudioSettingsDialog(const app::PlayerSettings& current, Q
 
 app::PlayerSettings StudioSettingsDialog::result() const {
     return app::PlayerSettings{toUtf8(executable_->text().trimmed()), toUtf8(commandTemplate_->text().trimmed()),
-                               foldBgmColumns_->isChecked()};
+                               foldBgmColumns_->isChecked(), toUtf8(renderTemplate_->text().trimmed())};
 }
 
 app::PlayerSettings StudioSettingsDialog::load() {
-    const QSettings settings(QStringLiteral("IgusaBmsonStudio"), QStringLiteral("IgusaBmsonStudio"));
+    const auto settings = openStudioSettings();
     app::PlayerSettings player;
-    player.executable = toUtf8(settings.value(kExecutableKey).toString());
-    player.commandTemplate = toUtf8(settings.value(kTemplateKey, toQString(player.commandTemplate)).toString());
-    player.foldBgmColumns = settings.value(kFoldKey, true).toBool();
+    player.executable = toUtf8(settings->value(kExecutableKey).toString());
+    player.commandTemplate = toUtf8(settings->value(kTemplateKey, toQString(player.commandTemplate)).toString());
+    player.foldBgmColumns = settings->value(kFoldKey, true).toBool();
+    player.renderTemplate = toUtf8(settings->value(kRenderKey, toQString(player.renderTemplate)).toString());
     return player;
 }
 
 void StudioSettingsDialog::save(const app::PlayerSettings& player) {
-    QSettings settings(QStringLiteral("IgusaBmsonStudio"), QStringLiteral("IgusaBmsonStudio"));
-    settings.setValue(kExecutableKey, toQString(player.executable));
-    settings.setValue(kTemplateKey, toQString(player.commandTemplate));
-    settings.setValue(kFoldKey, player.foldBgmColumns);
+    const auto settings = openStudioSettings();
+    settings->setValue(kExecutableKey, toQString(player.executable));
+    settings->setValue(kTemplateKey, toQString(player.commandTemplate));
+    settings->setValue(kFoldKey, player.foldBgmColumns);
+    settings->setValue(kRenderKey, toQString(player.renderTemplate));
 }
 
 }  // namespace ibs::gui

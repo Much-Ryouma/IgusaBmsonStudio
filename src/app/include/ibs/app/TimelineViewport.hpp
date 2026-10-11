@@ -22,6 +22,7 @@ public:
     void setPulsesPerPixel(double pulsesPerPixel);
     void zoomAround(double x, double factor);
     void fit(double fromPulse, double toPulse, double widthPixels);
+    bool follow(double pulse, double widthPixels);
 
     [[nodiscard]] int gridDivisionsFor(int resolution, double minimumSpacingPixels, int finestDivisions) const;
 

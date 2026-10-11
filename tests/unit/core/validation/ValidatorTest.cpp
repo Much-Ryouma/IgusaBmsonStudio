@@ -150,5 +150,24 @@ TEST_F(ValidatorTest, VAL014_WarnsWhenBannerIsNot15To4) {
     EXPECT_EQ(issue->severity, Severity::Warning);
 }
 
+TEST_F(ValidatorTest, VAL015_WarnsWhenOneSliceIsOnSeveralKeyLanes) {
+    const CutPointId shared = cutPointAt("a.wav", 480);
+    const CutPointId single = cutPointAt("b.wav", 960);
+    project.addNote(shared, 1, 0);
+    project.addNote(shared, 3, 0);
+    project.addNote(single, 2, 0);
+    project.addNote(single, 12, 0);
+
+    const auto issues = validate();
+
+    const auto count = std::count_if(issues.begin(), issues.end(), [](const Issue& issue) { return issue.code == "V15"; });
+    EXPECT_EQ(count, 1);
+    const auto issue = findIssue(issues, "V15");
+    ASSERT_TRUE(issue.has_value());
+    EXPECT_EQ(issue->severity, Severity::Warning);
+    EXPECT_NE(issue->message.find("y=480"), std::string::npos);
+    EXPECT_NE(issue->message.find("1, 3"), std::string::npos);
+}
+
 }  // namespace
 }  // namespace ibs::core

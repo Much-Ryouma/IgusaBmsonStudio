@@ -11,6 +11,7 @@
 #include "FakeFileSystem.hpp"
 #include "ibs/app/AssetImportService.hpp"
 #include "ibs/app/ChartStorage.hpp"
+#include "ibs/app/NullTestService.hpp"
 #include "ibs/app/PlaybackService.hpp"
 #include "ibs/app/PreviewService.hpp"
 #include "ibs/app/SlicingService.hpp"
@@ -91,6 +92,17 @@ public:
     }
 
     bool succeed = true;
+    std::vector<app::LaunchRequest> requests;
+};
+
+class RecordingRunner final : public app::ProcessRunner {
+public:
+    int run(const app::LaunchRequest& request) override {
+        requests.push_back(request);
+        return exitCode;
+    }
+
+    int exitCode = 0;
     std::vector<app::LaunchRequest> requests;
 };
 

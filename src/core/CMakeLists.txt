@@ -8,6 +8,7 @@ add_library(ibs_core STATIC
     src/audio/AudioBuffer.cpp
     src/audio/WaveformPyramid.cpp
     src/chart/ChartEditing.cpp
+    src/chart/ChartStatistics.cpp
     src/bmson/BmsonEquivalence.cpp
     src/bmson/BmsonExporter.cpp
     src/bmson/BmsonImporter.cpp
@@ -15,6 +16,7 @@ add_library(ibs_core STATIC
     src/mode/KeyMode.cpp
     src/model/BgaEditing.cpp
     src/model/Project.cpp
+    src/playback/BmsonRenderer.cpp
     src/playback/PlaybackRange.cpp
     src/sidecar/Sidecar.cpp
     src/slicing/CutPlanner.cpp

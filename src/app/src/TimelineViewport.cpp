@@ -52,6 +52,19 @@ void TimelineViewport::fit(double fromPulse, double toPulse, double widthPixels)
     setOrigin(fromPulse);
 }
 
+// Why not 再生位置を常に画面の同じ所に保つ: 毎フレーム全体が流れると波形やノーツを目で追えないため、
+// 端に近づいたときだけ 1 画面分めくる
+bool TimelineViewport::follow(double pulse, double widthPixels) {
+    constexpr double kTurnAt = 0.95;
+    constexpr double kLead = 0.05;
+    const double span = widthPixels * pulsesPerPixel_;
+    if (widthPixels <= 0.0 || (pulse >= originPulse_ && pulse <= originPulse_ + span * kTurnAt)) {
+        return false;
+    }
+    setOrigin(pulse - span * kLead);
+    return true;
+}
+
 int TimelineViewport::gridDivisionsFor(int resolution, double minimumSpacingPixels, int finestDivisions) const {
     // Why not 指定されたグリッドを常に描く: 縮小表示では線が画面を埋め尽くして波形が見えなくなるため、
     // 線の間隔が最小間隔を下回る間は分割を半分にしていく

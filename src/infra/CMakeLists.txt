@@ -20,6 +20,7 @@ add_library(ibs_infra STATIC
     src/json/PrettyJsonWriter.cpp
     src/midi/StandardMidiFile.cpp
     src/mode/KeyModeJsonLoader.cpp
+    src/process/ProcessRunner.cpp
     src/sidecar/SidecarJsonCodec.cpp)
 add_library(ibs::infra ALIAS ibs_infra)
 

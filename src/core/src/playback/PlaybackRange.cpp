@@ -9,6 +9,7 @@ namespace ibs::core {
 namespace {
 
 constexpr int kOutputChannels = 2;
+constexpr double kPositionTolerance = 1e-6;
 
 float sourceSample(const AudioBuffer& audio, std::size_t frame, int outputChannel) {
     const auto channels = static_cast<std::size_t>(audio.channels);
@@ -33,15 +34,16 @@ void mixSource(const Project& project, const TimingMap& timing, const MixSource&
         if (position < 0.0) {
             continue;
         }
-        const auto index = static_cast<std::size_t>(position);
-        if (index + 1 >= sourceFrames) {
+        if (position > static_cast<double>(sourceFrames) - 1.0 + kPositionTolerance) {
             break;
         }
+        const auto index = std::min(static_cast<std::size_t>(position), sourceFrames - 1);
+        const std::size_t next = std::min(index + 1, sourceFrames - 1);
         // Why not 最も近いサンプルを使う: 素材と出力のサンプルレートが違うとき、ざらついた音になって試聴の判断を誤らせるため線形補間する
         const auto fraction = static_cast<float>(position - static_cast<double>(index));
         for (int channel = 0; channel < kOutputChannels; ++channel) {
             const float a = sourceSample(audio, index, channel);
-            const float b = sourceSample(audio, index + 1, channel);
+            const float b = sourceSample(audio, next, channel);
             output.interleavedSamples[frame * kOutputChannels + static_cast<std::size_t>(channel)] +=
                 source.gain * (a + (b - a) * fraction);
         }

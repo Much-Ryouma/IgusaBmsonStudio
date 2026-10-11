@@ -36,7 +36,7 @@ inline core::KeyModeCatalog beat7kCatalog() {
 class GuiFixture {
 public:
     GuiFixture()
-        : controller_(StudioPorts{storage_, source_, output_, files_, beat7kCatalog(), launcher_}), window_(controller_) {
+        : controller_(StudioPorts{storage_, source_, output_, files_, beat7kCatalog(), launcher_, runner_}), window_(controller_) {
         source_.buffers[kChartDirectory / "drums.wav"] = drumHits();
         NewProjectSettings settings;
         settings.chartPath = kChartDirectory / "song.bmson";
@@ -89,6 +89,7 @@ public:
     MainWindow& window() { return window_; }
     ibs::testing::FakeAudioOutput& output() { return output_; }
     ibs::testing::RecordingLauncher& launcher() { return launcher_; }
+    ibs::testing::RecordingRunner& runner() { return runner_; }
     const core::Project& project() const { return controller_.project(); }
 
     core::AssetId asset;
@@ -100,6 +101,7 @@ private:
     ibs::testing::FakeAudioOutput output_{1000};
     ibs::testing::FakeAssetFileStore files_;
     ibs::testing::RecordingLauncher launcher_;
+    ibs::testing::RecordingRunner runner_;
     StudioController controller_;
     MainWindow window_;
 };

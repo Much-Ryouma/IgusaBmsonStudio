@@ -10,6 +10,7 @@
 class QAction;
 class QComboBox;
 class QLabel;
+class QMenu;
 class QTabWidget;
 
 namespace ibs::gui {
@@ -35,6 +36,7 @@ public:
     [[nodiscard]] SlicerPanel* slicerPanel() const noexcept { return slicerPanel_; }
     [[nodiscard]] QAction* undoAction() const noexcept { return undo_; }
     [[nodiscard]] QAction* redoAction() const noexcept { return redo_; }
+    [[nodiscard]] QMenu* recentMenu() const noexcept { return recentMenu_; }
 
     bool openChart(const std::filesystem::path& path);
 
@@ -58,6 +60,7 @@ private:
     void showStatus(const QString& message);
     void buildChartMenu();
     void refreshChartStats();
+    void refreshRecentMenu();
     void transformSelected(const QString& label, const std::map<core::NoteId, int>& lanes);
 
     StudioController& controller_;
@@ -71,6 +74,7 @@ private:
     QAction* undo_ = nullptr;
     QAction* redo_ = nullptr;
     QComboBox* snap_ = nullptr;
+    QMenu* recentMenu_ = nullptr;
 };
 
 }  // namespace ibs::gui

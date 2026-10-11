@@ -5,10 +5,14 @@ add_library(ibs_app STATIC
     src/BgaCommands.cpp
     src/ChartCommands.cpp
     src/ChartService.cpp
+    src/ChartStatisticsService.cpp
     src/ChartStorage.cpp
     src/EditorDocument.cpp
+    src/NullTestService.cpp
     src/PlaybackService.cpp
     src/PreviewService.cpp
+    src/ProjectAudio.cpp
+    src/RecentFiles.cpp
     src/SlicingService.cpp
     src/SlicingSession.cpp
     src/TimelineViewport.cpp)

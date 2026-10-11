@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <optional>
 #include <vector>
 
@@ -22,6 +23,11 @@ public:
     [[nodiscard]] app::TimelineViewport& viewport() noexcept { return viewport_; }
     [[nodiscard]] double xOfSongPulse(double pulse) const { return viewport_.xOf(pulse); }
     void fitPlacement();
+    void revealCut(core::CutPointId cut, bool zoomToSlice);
+    void revealRange(double fromPulse, double toPulse, bool zoomToRange);
+    [[nodiscard]] double contentStartPulse() const;
+    [[nodiscard]] double contentEndPulse() const;
+    void setViewObserver(std::function<void()> observer) { viewObserver_ = std::move(observer); }
 
 protected:
     void paintEvent(QPaintEvent* event) override;
@@ -61,6 +67,8 @@ private:
     std::optional<core::PlacementId> shownPlacement_;
     std::optional<CutDrag> drag_;
     std::optional<RubberBand> rubberBand_;
+    bool needsFit_ = false;
+    std::function<void()> viewObserver_;
 };
 
 }  // namespace ibs::gui

@@ -48,13 +48,15 @@ tests/specs/
 | [app/preview_bga.md](app/preview_bga.md) | 外部プレーヤーでのプレビュー、BGA と曲の情報の操作 | PRV / BGC | 実装済み |
 | [app/slicing_playback.md](app/slicing_playback.md) | 素材の読み込み、試聴、音切りのプレビューと適用 | AUL / PLY / SLS | 実装済み |
 | [gui/studio.md](gui/studio.md) | 画面の操作（画面を出さずに実行する自動テスト） | GUI | 実装済み |
-| [gui/manual_checklist.md](gui/manual_checklist.md) | 見た目と実際の音の手動チェックリスト | — | M3 |
+| [gui/manual_checklist.md](gui/manual_checklist.md) | 見た目と実際の音の手動チェックリスト | — | M6 |
 | [core/slicing.md](core/slicing.md) | 音声バッファ、FFT、立ち上がりの検出、波形の縮小表示、グリッドとクオンタイズ、小節線と拍子 | AUD / FFT / ONS / WAV / QNT / CUT / APL / BAR | 実装済み |
-| [core/playback.md](core/playback.md) | 試聴の範囲、曲のミックス | RNG | 実装済み |
+| [core/playback.md](core/playback.md) | 試聴の範囲、曲のミックス、bmson の鳴らし方と 2 つの音の比較 | RNG / NUL | 実装済み |
+| [app/statistics_nulltest.md](app/statistics_nulltest.md) | 譜面の統計、ヌルテスト、最近使った譜面 | STA / NTS / RCF | 実装済み |
 | [core/sidecar_bga.md](core/sidecar_bga.md) | サイドカーの取り出しと復元、BGA の編集 | SDC / BGE | 実装済み |
 | [core/chart_editing.md](core/chart_editing.md) | レーン割当、パターンの貼り付け、変形、テンポ変更でずれる配置 | CHE | 実装済み |
 | [core/midi.md](core/midi.md) | MIDI の組み立て、SMF の書き出し、MIDI プロファイル | MID / SMF / MPF | 実装済み |
 | [infra/audio.md](infra/audio.md) | 音声の読み込み、音切りのユースケース | DEC / SLC | 実装済み |
+| [infra/process.md](infra/process.md) | 外部プロセスの実行（ヌルテストの書き出し） | PRC | 実装済み |
 
 ## 手元の作品で往復テストを実行する
 

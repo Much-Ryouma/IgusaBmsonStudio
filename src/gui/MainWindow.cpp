@@ -12,10 +12,12 @@
 #include <QHBoxLayout>
 #include <QInputDialog>
 #include <QPushButton>
+#include <QVBoxLayout>
 #include <QTabWidget>
 #include <QKeySequence>
 #include <QSignalBlocker>
 #include <QLabel>
+#include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
 #include <QSplitter>
@@ -24,12 +26,17 @@
 
 #include "ArrangerWidget.hpp"
 #include "BgaPanel.hpp"
+#include "NullTestDialog.hpp"
+#include "StatisticsDialog.hpp"
 #include "StudioSettingsDialog.hpp"
+#include "TimelineScrollBar.hpp"
 #include "ChartEditorWidget.hpp"
 #include "QtText.hpp"
+#include "StudioSettings.hpp"
 #include "SlicerPanel.hpp"
 #include "SongSettingsDialog.hpp"
 #include "WaveformSlicerWidget.hpp"
+#include "ibs/app/RecentFiles.hpp"
 #include "ibs/core/BuildInfo.hpp"
 #include "ibs/core/chart/ChartEditing.hpp"
 #include "ibs/core/validation/Validator.hpp"
@@ -41,6 +48,26 @@ namespace {
 constexpr int kStatusTimeoutMs = 8000;
 constexpr int kMaximumListedIssues = 20;
 constexpr int kSnapChoices[] = {4, 8, 12, 16, 24, 32, 48, 64};
+const QString kRecentFilesKey = QStringLiteral("file/recentFiles");
+const QString kGeometryKey = QStringLiteral("window/geometry");
+const QString kStateKey = QStringLiteral("window/state");
+const QString kFollowPlaybackKey = QStringLiteral("view/followPlayback");
+
+std::vector<std::string> loadRecentFiles() {
+    std::vector<std::string> recent;
+    for (const auto& entry : openStudioSettings()->value(kRecentFilesKey).toStringList()) {
+        recent.push_back(toUtf8(entry));
+    }
+    return recent;
+}
+
+void storeRecentFiles(const std::vector<std::string>& recent) {
+    QStringList entries;
+    for (const auto& entry : recent) {
+        entries << toQString(entry);
+    }
+    openStudioSettings()->setValue(kRecentFilesKey, entries);
+}
 
 QString issuesText(const std::vector<core::Issue>& issues, core::Severity severity) {
     QStringList lines;
@@ -68,15 +95,38 @@ MainWindow::MainWindow(StudioController& controller, QWidget* parent) : QMainWin
     bgaPanel_->setFixedWidth(240);
     chartLayout->addWidget(chartEditor_, 1);
     chartLayout->addWidget(bgaPanel_);
-    tabs_->addTab(arranger_, QStringLiteral("アレンジャー"));
+    auto* arrangerPage = new QWidget(tabs_);
+    auto* arrangerLayout = new QVBoxLayout(arrangerPage);
+    arrangerLayout->setContentsMargins(0, 0, 0, 0);
+    arrangerLayout->setSpacing(0);
+    arranger_->setParent(arrangerPage);
+    auto* arrangerScroll = new TimelineScrollBar(
+        {&arranger_->viewport(), arranger_, [] { return 0.0; }, [this] { return arranger_->contentEndPulse(); },
+         [this] { return arranger_->timelineWidthPixels(); }},
+        arrangerPage);
+    arranger_->setViewObserver([arrangerScroll] { arrangerScroll->sync(); });
+    arrangerLayout->addWidget(arranger_, 1);
+    arrangerLayout->addWidget(arrangerScroll);
+    tabs_->addTab(arrangerPage, QStringLiteral("アレンジャー"));
     tabs_->addTab(chartPage, QStringLiteral("譜面"));
     auto* bottom = new QWidget(splitter);
     auto* bottomLayout = new QHBoxLayout(bottom);
     bottomLayout->setContentsMargins(0, 0, 0, 0);
-    slicer_ = new WaveformSlicerWidget(controller_, bottom);
+    auto* slicerColumn = new QWidget(bottom);
+    auto* slicerLayout = new QVBoxLayout(slicerColumn);
+    slicerLayout->setContentsMargins(0, 0, 0, 0);
+    slicerLayout->setSpacing(0);
+    slicer_ = new WaveformSlicerWidget(controller_, slicerColumn);
+    auto* slicerScroll = new TimelineScrollBar(
+        {&slicer_->viewport(), slicer_, [this] { return slicer_->contentStartPulse(); },
+         [this] { return slicer_->contentEndPulse(); }, [this] { return static_cast<double>(slicer_->width()); }},
+        slicerColumn);
+    slicer_->setViewObserver([slicerScroll] { slicerScroll->sync(); });
+    slicerLayout->addWidget(slicer_, 1);
+    slicerLayout->addWidget(slicerScroll);
     slicerPanel_ = new SlicerPanel(controller_, bottom);
     slicerPanel_->setFixedWidth(300);
-    bottomLayout->addWidget(slicer_, 1);
+    bottomLayout->addWidget(slicerColumn, 1);
     bottomLayout->addWidget(slicerPanel_);
     splitter->addWidget(tabs_);
     splitter->addWidget(bottom);
@@ -107,12 +157,18 @@ MainWindow::MainWindow(StudioController& controller, QWidget* parent) : QMainWin
     refreshTitle();
     refreshUndoActions();
     statusBar()->showMessage(QStringLiteral("v") + toQString(core::kVersion));
+    const auto settings = openStudioSettings();
+    restoreGeometry(settings->value(kGeometryKey).toByteArray());
+    restoreState(settings->value(kStateKey).toByteArray());
 }
 
 void MainWindow::buildMenus() {
     auto* file = menuBar()->addMenu(QStringLiteral("ファイル(&F)"));
     file->addAction(QStringLiteral("新しい譜面…"), QKeySequence::New, this, &MainWindow::newChart);
     file->addAction(QStringLiteral("開く…"), QKeySequence::Open, this, &MainWindow::openChartDialog);
+    recentMenu_ = file->addMenu(QStringLiteral("最近使った譜面"));
+    connect(recentMenu_, &QMenu::aboutToShow, this, &MainWindow::refreshRecentMenu);
+    refreshRecentMenu();
     file->addAction(QStringLiteral("保存"), QKeySequence::Save, this, [this] { saveChart(); });
     file->addAction(QStringLiteral("名前を付けて保存…"), QKeySequence::SaveAs, this, [this] { saveChartAs(); });
     file->addSeparator();
@@ -139,6 +195,35 @@ void MainWindow::buildMenus() {
 
     auto* view = menuBar()->addMenu(QStringLiteral("表示(&V)"));
     view->addAction(QStringLiteral("曲全体を表示"), QKeySequence(QStringLiteral("Ctrl+0")), this, [this] { arranger_->zoomToFit(); });
+    auto* followPlayback = view->addAction(QStringLiteral("再生位置に合わせてスクロールする"));
+    followPlayback->setCheckable(true);
+    controller_.setFollowsPlayback(openStudioSettings()->value(kFollowPlaybackKey, true).toBool());
+    followPlayback->setChecked(controller_.followsPlayback());
+    connect(followPlayback, &QAction::toggled, this, [this](bool enabled) {
+        controller_.setFollowsPlayback(enabled);
+        openStudioSettings()->setValue(kFollowPlaybackKey, enabled);
+    });
+
+    auto* statistics = menuBar()->addMenu(QStringLiteral("統計(&S)"));
+    statistics->addAction(QStringLiteral("譜面の統計…"), QKeySequence(QStringLiteral("Ctrl+Shift+I")), this, [this] {
+        auto* dialog = new StatisticsDialog(controller_, this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->show();
+    });
+    statistics->addSeparator();
+    statistics->addAction(QStringLiteral("ヌルテスト（内蔵の再生）…"), this, [this] {
+        auto* dialog = new NullTestDialog(controller_, NullTestSource::InternalPlayer, this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->show();
+    });
+    statistics->addAction(QStringLiteral("ヌルテスト（プレーヤーで書き出し）…"), this, [this] {
+        if (controller_.playerSettings().executable.empty()) {
+            editSettings();
+        }
+        auto* dialog = new NullTestDialog(controller_, NullTestSource::ExternalPlayer, this);
+        dialog->setAttribute(Qt::WA_DeleteOnClose);
+        dialog->show();
+    });
 
     auto* help = menuBar()->addMenu(QStringLiteral("ヘルプ(&H)"));
     help->addAction(QStringLiteral("操作方法"), this, [this] {
@@ -150,7 +235,7 @@ void MainWindow::buildMenus() {
                                                 "  上の目盛りをクリック: 再生カーソル、Space: 曲の再生/停止\n"
                                                 "  Ctrl+ホイール: 拡大縮小、Shift+ホイール: 横スクロール\n\n"
                                                 "音切り\n"
-                                                "  波形をクリック: そのスライスを試聴、←/→: 前後のスライスを試聴\n"
+                                                "  波形をクリック: そのスライスを試聴、←/→: 前後のスライスを試聴（画面の外なら自動でスクロール）\n"
                                                 "  ダブルクリック: 切断点を追加、切断点をドラッグ: 移動\n"
                                                 "  Shift+ドラッグ: 範囲選択、Ctrl+クリック: 選択に追加\n"
                                                 "  Delete: 削除、Q: グリッドに寄せる、P: 配置全体を試聴、F: 全体を表示\n\n"
@@ -162,7 +247,8 @@ void MainWindow::buildMenus() {
                                                 "  空いた所をドラッグ: 範囲選択、クリック: カーソル、Ctrl+C / Ctrl+V: 割当パターン\n"
                                                 "  右クリック: BPM・STOP・拍子・小節線、Tab: 切断点モード（ダブルクリックで追加、ドラッグで移動）\n"
                                                 "  BGA / LYR / POOR 列: 右の一覧で画像を選び、ダブルクリックで置く。ドラッグで移動、Delete で削除\n\n"
-                                                "F7: 外部プレーヤー（Pulsus など）でカーソルの小節から再生"));
+                                                "F7: 外部プレーヤー（Pulsus など）でカーソルの小節から再生\n"
+                                                "Ctrl+Shift+I: 譜面の統計、統計 → ヌルテスト: 配置どおりに鳴るかの確認"));
     });
 }
 
@@ -231,9 +317,11 @@ void MainWindow::newChart() {
 bool MainWindow::openChart(const std::filesystem::path& path) {
     QString error;
     if (!controller_.open(path, &error)) {
+        storeRecentFiles(app::withoutRecentFile(loadRecentFiles(), path));
         QMessageBox::warning(this, QStringLiteral("開けませんでした"), error);
         return false;
     }
+    storeRecentFiles(app::withRecentFile(loadRecentFiles(), path));
     arranger_->zoomToFit();
     refreshTitle();
     refreshUndoActions();
@@ -275,6 +363,7 @@ bool MainWindow::saveTo(const std::filesystem::path& path) {
     const auto warnings = std::count_if(outcome.issues.begin(), outcome.issues.end(),
                                         [](const core::Issue& issue) { return issue.severity == core::Severity::Warning; });
     showStatus(warnings > 0 ? QStringLiteral("保存しました（警告 %1 件）").arg(warnings) : QStringLiteral("保存しました"));
+    storeRecentFiles(app::withRecentFile(loadRecentFiles(), path));
     refreshTitle();
     return true;
 }
@@ -326,7 +415,9 @@ void MainWindow::editSongInfo() {
 }
 
 void MainWindow::buildChartMenu() {
-    auto* chart = menuBar()->addMenu(QStringLiteral("譜面(&C)"));
+    auto* chart = new QMenu(QStringLiteral("譜面(&C)"), this);
+    const auto actions = menuBar()->actions();
+    menuBar()->insertMenu(actions.size() >= 2 ? actions.at(actions.size() - 2) : nullptr, chart);
     auto* cutMode = chart->addAction(QStringLiteral("切断点モード（Tab）"));
     cutMode->setCheckable(true);
     connect(cutMode, &QAction::toggled, this, [this](bool enabled) {
@@ -340,6 +431,18 @@ void MainWindow::buildChartMenu() {
     advance->setCheckable(true);
     advance->setChecked(chartEditor_->autoAdvance());
     connect(advance, &QAction::toggled, this, [this](bool enabled) { chartEditor_->setAutoAdvance(enabled); });
+    auto* follow = chart->addAction(QStringLiteral("クリックしたスライスを波形に表示する"));
+    follow->setCheckable(true);
+    {
+        const auto settings = openStudioSettings();
+        controller_.setFollowsChartSelection(settings->value(QStringLiteral("view/followChartSelection"), true).toBool());
+    }
+    follow->setChecked(controller_.followsChartSelection());
+    connect(follow, &QAction::toggled, this, [this](bool enabled) {
+        controller_.setFollowsChartSelection(enabled);
+        const auto settings = openStudioSettings();
+        settings->setValue(QStringLiteral("view/followChartSelection"), enabled);
+    });
     auto* collapse = chart->addAction(QStringLiteral("BGM 列を折りたたむ"));
     collapse->setCheckable(true);
     connect(collapse, &QAction::toggled, this, [this](bool collapsed) { chartEditor_->setBgmColumnsCollapsed(collapsed); });
@@ -438,9 +541,26 @@ void MainWindow::editSettings() {
 
 void MainWindow::showStatus(const QString& message) { statusBar()->showMessage(message, kStatusTimeoutMs); }
 
+void MainWindow::refreshRecentMenu() {
+    recentMenu_->clear();
+    const auto recent = loadRecentFiles();
+    for (const auto& entry : recent) {
+        const auto path = toPath(toQString(entry));
+        recentMenu_->addAction(toQString(entry), this, [this, path] {
+            if (confirmDiscard()) {
+                openChart(path);
+            }
+        });
+    }
+    recentMenu_->setEnabled(!recent.empty());
+}
+
 void MainWindow::closeEvent(QCloseEvent* event) {
     if (confirmDiscard()) {
         controller_.stopPlayback();
+        const auto settings = openStudioSettings();
+        settings->setValue(kGeometryKey, saveGeometry());
+        settings->setValue(kStateKey, saveState());
         event->accept();
     } else {
         event->ignore();

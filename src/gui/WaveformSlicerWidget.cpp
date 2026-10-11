@@ -36,8 +36,14 @@ WaveformSlicerWidget::WaveformSlicerWidget(StudioController& controller, QWidget
     connect(&controller_, &StudioController::previewChanged, this, [this] { update(); });
     connect(&controller_, &StudioController::playheadChanged, this, [this] { update(); });
     connect(&controller_, &StudioController::audioLoaded, this, [this] {
-        if (shownPlacement_) {
+        if (shownPlacement_ && needsFit_) {
             fitPlacement();
+        }
+    });
+    connect(&controller_, &StudioController::cutFocusRequested, this, [this](core::CutPointId cut) {
+        if (shownPlacement_ && controller_.project().containsCutPoint(cut) &&
+            controller_.project().cutPoint(cut).placementId == *shownPlacement_) {
+            revealCut(cut, true);
         }
     });
 }
@@ -47,6 +53,7 @@ void WaveformSlicerWidget::onSelectionChanged() {
         shownPlacement_ = controller_.selectedPlacement();
         drag_.reset();
         rubberBand_.reset();
+        needsFit_ = true;
         fitPlacement();
     }
     update();
@@ -75,12 +82,51 @@ void WaveformSlicerWidget::fitPlacement() {
     const auto end = static_cast<double>(placementEnd());
     const double margin = (end - start) * kFitMarginFraction;
     viewport_.fit(std::max(0.0, start - margin), end + margin, std::max(50.0, static_cast<double>(width())));
+    needsFit_ = width() < 50 || !controller_.library().cached(
+                                    controller_.project().asset(controller_.project().placement(*shownPlacement_).assetId).name);
     update();
+}
+
+double WaveformSlicerWidget::contentStartPulse() const {
+    return shownPlacement_ ? static_cast<double>(placementStart()) : 0.0;
+}
+
+double WaveformSlicerWidget::contentEndPulse() const {
+    return shownPlacement_ ? static_cast<double>(placementEnd()) : 0.0;
+}
+
+// Why not 常に配置全体を表示し直す: 数分のステムでは 1 つのスライスが数画素になり、聴いている音の波形が見えないため、
+// 必要なときだけ拡大し、それ以外は今の倍率のまま見える位置へ動かす
+void WaveformSlicerWidget::revealRange(double fromPulse, double toPulse, bool zoomToRange) {
+    const double visible = std::max(1.0, width() * viewport_.pulsesPerPixel());
+    const double span = std::max(1.0, toPulse - fromPulse);
+    const double resolution = static_cast<double>(std::max(1, controller_.project().timing.resolution));
+    if (zoomToRange || span > visible * 0.9) {
+        const double padding = std::max(span * 0.25, resolution);
+        const double width = std::max(span + padding * 2.0, resolution * 4.0);
+        const double center = (fromPulse + toPulse) / 2.0;
+        viewport_.fit(std::max(0.0, center - width / 2.0), center + width / 2.0, std::max(50.0, static_cast<double>(this->width())));
+    } else if (fromPulse < viewport_.originPulse() || toPulse > viewport_.originPulse() + visible) {
+        viewport_.setOrigin(fromPulse - (visible - span) * 0.3);
+    }
+    update();
+}
+
+void WaveformSlicerWidget::revealCut(core::CutPointId cut, bool zoomToSlice) {
+    const auto& project = controller_.project();
+    const auto ordered = project.cutPointsOf(project.cutPoint(cut).placementId);
+    const auto position = std::find(ordered.begin(), ordered.end(), cut);
+    const auto from = static_cast<double>(project.absolutePulseOf(project.cutPoint(cut)));
+    double to = static_cast<double>(placementEnd());
+    if (position != ordered.end() && std::next(position) != ordered.end()) {
+        to = static_cast<double>(project.absolutePulseOf(project.cutPoint(*std::next(position))));
+    }
+    revealRange(from, to, zoomToSlice);
 }
 
 void WaveformSlicerWidget::resizeEvent(QResizeEvent* event) {
     QWidget::resizeEvent(event);
-    if (!drag_) {
+    if (needsFit_ && !drag_) {
         fitPlacement();
     }
 }
@@ -137,6 +183,9 @@ void WaveformSlicerWidget::paintEvent(QPaintEvent*) {
         painter.setPen(QPen(palette::kPlayhead, 1.5));
         const double x = viewport_.xOf(*playhead);
         painter.drawLine(QPointF(x, 0), QPointF(x, height()));
+    }
+    if (viewObserver_) {
+        viewObserver_();
     }
 }
 
@@ -379,6 +428,7 @@ void WaveformSlicerWidget::stepSlice(int direction) {
     index = std::clamp<std::ptrdiff_t>(index, 0, static_cast<std::ptrdiff_t>(ordered.size()) - 1);
     const auto cut = ordered[static_cast<std::size_t>(index)];
     controller_.setSelectedCuts({cut});
+    revealCut(cut, false);
     controller_.playSlice(cut);
 }
 

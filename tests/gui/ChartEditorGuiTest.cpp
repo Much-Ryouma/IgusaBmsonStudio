@@ -1,5 +1,9 @@
 #include <QAbstractButton>
+#include <QLabel>
+#include <QLineEdit>
+#include <QListWidget>
 #include <QMessageBox>
+#include <QTableWidget>
 #include <QTabWidget>
 #include <QTest>
 #include <QTimer>
@@ -8,12 +12,14 @@
 
 #include "BgaPanel.hpp"
 #include "ChartEditorWidget.hpp"
-#include "SongSettingsDialog.hpp"
-#include "ibs/infra/fs/Utf8Path.hpp"
-#include <QLineEdit>
-#include <QListWidget>
 #include "GuiFixture.hpp"
+#include "NullTestDialog.hpp"
+#include "SongSettingsDialog.hpp"
+#include "StatisticsDialog.hpp"
+#include "TimelineScrollBar.hpp"
+#include "WaveformSlicerWidget.hpp"
 #include "ibs/core/timing/TimingEdits.hpp"
+#include "ibs/infra/fs/Utf8Path.hpp"
 
 namespace ibs::gui::testing {
 namespace {
@@ -191,6 +197,135 @@ TEST(ChartEditorGui, GUI016_SongInfoImagesMustBeInsideTheChartFolder) {
     EXPECT_TRUE(fixture.project().info.backImage.empty());
     EXPECT_EQ(fixture.project().info.title, "いぐさの歌");
     EXPECT_EQ(fixture.controller().document().undoLabel(), "曲の情報");
+}
+
+TEST(ChartEditorGui, GUI017_ScrollBarsMoveTheArrangerAndWaveform) {
+    ChartFixture fixture;
+    fixture.controller().selectPlacement(fixture.placement);
+    fixture.settle();
+    auto* slicer = fixture.window().slicer();
+    slicer->viewport().setPulsesPerPixel(0.5);
+    slicer->repaint();
+
+    TimelineScrollBar* slicerBar = nullptr;
+    for (auto* bar : fixture.window().findChildren<TimelineScrollBar*>()) {
+        if (bar->parentWidget() == slicer->parentWidget()) {
+            slicerBar = bar;
+        }
+    }
+    ASSERT_NE(slicerBar, nullptr);
+    EXPECT_GT(slicerBar->maximum(), slicerBar->minimum());
+    const int target = (slicerBar->minimum() + slicerBar->maximum()) / 2;
+    slicerBar->setValue(target);
+    EXPECT_DOUBLE_EQ(slicer->viewport().originPulse(), static_cast<double>(target));
+    EXPECT_EQ(fixture.window().findChildren<TimelineScrollBar*>().size(), 2u);
+}
+
+TEST(ChartEditorGui, GUI018_ArrowKeysScrollTheNextSliceIntoView) {
+    ChartFixture fixture;
+    fixture.controller().selectPlacement(fixture.placement);
+    fixture.settle();
+    auto* slicer = fixture.window().slicer();
+    slicer->viewport().setPulsesPerPixel(0.5);
+    slicer->viewport().setOrigin(960.0);
+    fixture.controller().setSelectedCuts({fixture.cuts[1]});
+
+    QTest::keyClick(slicer, Qt::Key_Right);
+
+    const double origin = slicer->viewport().originPulse();
+    const double visibleEnd = origin + slicer->width() * slicer->viewport().pulsesPerPixel();
+    EXPECT_EQ(fixture.controller().selectedCuts(), std::vector<core::CutPointId>{fixture.cuts[2]});
+    EXPECT_LE(origin, 1680.0);
+    EXPECT_GE(visibleEnd, 1680.0 + 240.0);
+    EXPECT_DOUBLE_EQ(slicer->viewport().pulsesPerPixel(), 0.5);
+}
+
+TEST(ChartEditorGui, GUI019_ClickingANoteShowsItsSliceUnlessTurnedOff) {
+    ChartFixture fixture;
+    const auto note = app::assignLanes(fixture.controller().document(), {fixture.cuts[1]}, 2).front();
+    const auto other = app::placeAsset(fixture.controller().document(), fixture.asset, 9600);
+    fixture.controller().selectPlacement(other);
+    fixture.settle();
+
+    fixture.controller().setFollowsChartSelection(false);
+    GuiFixture::send(fixture.editor(), QEvent::MouseButtonPress, fixture.noteHead(note), Qt::LeftButton, Qt::LeftButton);
+    GuiFixture::send(fixture.editor(), QEvent::MouseButtonRelease, fixture.noteHead(note), Qt::LeftButton, Qt::NoButton);
+    EXPECT_EQ(fixture.controller().selectedPlacement(), other);
+
+    fixture.controller().setFollowsChartSelection(true);
+    GuiFixture::send(fixture.editor(), QEvent::MouseButtonPress, fixture.noteHead(note), Qt::LeftButton, Qt::LeftButton);
+    GuiFixture::send(fixture.editor(), QEvent::MouseButtonRelease, fixture.noteHead(note), Qt::LeftButton, Qt::NoButton);
+    fixture.settle();
+
+    auto* slicer = fixture.window().slicer();
+    const double origin = slicer->viewport().originPulse();
+    const double visibleEnd = origin + slicer->width() * slicer->viewport().pulsesPerPixel();
+    EXPECT_EQ(fixture.controller().selectedPlacement(), fixture.placement);
+    EXPECT_LE(origin, 1440.0);
+    EXPECT_GE(visibleEnd, 1680.0);
+    EXPECT_LT(visibleEnd - origin, 2000.0);
+}
+
+TEST(ChartEditorGui, GUI020_StatisticsDialogShowsChartBgmAndTotal) {
+    ChartFixture fixture;
+    app::assignLanes(fixture.controller().document(), {fixture.cuts[0]}, 8);
+    StatisticsDialog dialog(fixture.controller());
+    fixture.settle();
+    auto* table = dialog.table();
+
+    ASSERT_GT(table->rowCount(), 10);
+    EXPECT_EQ(table->item(0, 1)->text(), QStringLiteral("1"));
+    EXPECT_EQ(table->item(0, 2)->text(), QStringLiteral("3"));
+    EXPECT_EQ(table->item(0, 3)->text(), QStringLiteral("4"));
+    EXPECT_EQ(table->item(3, 1)->text(), QStringLiteral("1"));
+    int peakRow = -1;
+    for (int row = 0; row < table->rowCount(); ++row) {
+        if (table->item(row, 0)->text().startsWith(QStringLiteral("最大音量"))) {
+            peakRow = row;
+        }
+    }
+    ASSERT_GE(peakRow, 0);
+    EXPECT_TRUE(table->item(peakRow, 3)->text().contains(QStringLiteral("小節")));
+    emit table->cellDoubleClicked(peakRow, 3);
+    EXPECT_GE(fixture.controller().cursorPulse(), 960);
+}
+
+TEST(ChartEditorGui, GUI021_NullTestDialogListsTheDoubledSectionAndJumpsToIt) {
+    ChartFixture fixture;
+    app::assignLanes(fixture.controller().document(), {fixture.cuts[0]}, 1);
+    fixture.controller().document().apply("二重", [&](core::Project& project) {
+        return project.addNote(fixture.cuts[0], 2, 0);
+    });
+    fixture.controller().setCursorPulse(0);
+
+    NullTestDialog dialog(fixture.controller(), NullTestSource::InternalPlayer);
+    fixture.settle();
+
+    EXPECT_TRUE(dialog.summary()->text().startsWith(QStringLiteral("不一致"))) << dialog.summary()->text().toStdString();
+    ASSERT_GT(dialog.table()->rowCount(), 0);
+    emit dialog.table()->cellDoubleClicked(0, 0);
+    EXPECT_GE(fixture.controller().cursorPulse(), 960);
+}
+
+TEST(ChartEditorGui, GUI022_NullTestWithPlayerReportsRenderFailures) {
+    ChartFixture fixture;
+    {
+        NullTestDialog dialog(fixture.controller(), NullTestSource::ExternalPlayer);
+        fixture.settle();
+        EXPECT_TRUE(dialog.summary()->text().contains(QStringLiteral("プレーヤー")));
+        EXPECT_TRUE(fixture.runner().requests.empty());
+    }
+    auto player = fixture.controller().playerSettings();
+    player.executable = "Pulsus.exe";
+    fixture.controller().setPlayerSettings(player);
+    fixture.runner().exitCode = 5;
+
+    NullTestDialog dialog(fixture.controller(), NullTestSource::ExternalPlayer);
+    fixture.settle();
+
+    ASSERT_EQ(fixture.runner().requests.size(), 1u);
+    EXPECT_EQ(fixture.runner().requests.front().arguments.at(1), "--render");
+    EXPECT_TRUE(dialog.summary()->text().contains(QStringLiteral("5")));
 }
 
 }  // namespace

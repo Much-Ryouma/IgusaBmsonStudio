@@ -1,5 +1,7 @@
 #pragma once
 
+#include <algorithm>
+#include <functional>
 #include <optional>
 
 #include <QWidget>
@@ -24,6 +26,9 @@ public:
     [[nodiscard]] int rowTop(std::size_t row) const;
 
     void zoomToFit();
+    [[nodiscard]] double contentEndPulse() const;
+    [[nodiscard]] double timelineWidthPixels() const { return std::max(1, width() - kHeaderWidth); }
+    void setViewObserver(std::function<void()> observer) { viewObserver_ = std::move(observer); }
 
 signals:
     void placementActivated(core::PlacementId placement);
@@ -62,6 +67,7 @@ private:
     app::TimelineViewport viewport_{8.0, 0.25, 2048.0};
     double verticalOffset_ = 0.0;
     std::optional<Drag> drag_;
+    std::function<void()> viewObserver_;
 };
 
 }  // namespace ibs::gui

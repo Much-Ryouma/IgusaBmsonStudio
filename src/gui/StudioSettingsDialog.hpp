@@ -24,6 +24,7 @@ private:
     QLineEdit* executable_ = nullptr;
     QLineEdit* commandTemplate_ = nullptr;
     QCheckBox* foldBgmColumns_ = nullptr;
+    QLineEdit* renderTemplate_ = nullptr;
 };
 
 }  // namespace ibs::gui
