@@ -144,6 +144,20 @@ void Project::removePlacement(PlacementId placementId) {
     tempoAffected_.erase(placementId);
 }
 
+void Project::removeAsset(AssetId assetId) {
+    static_cast<void>(asset(assetId));
+    std::vector<PlacementId> owned;
+    for (const auto& existing : placements_) {
+        if (existing.assetId == assetId) {
+            owned.push_back(existing.id);
+        }
+    }
+    for (const auto placementId : owned) {
+        removePlacement(placementId);
+    }
+    assets_.erase(locate(assets_, assetId));
+}
+
 void Project::removeNote(NoteId noteId) {
     static_cast<void>(note(noteId));
     notes_.erase(locate(notes_, noteId));

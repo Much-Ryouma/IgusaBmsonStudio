@@ -15,6 +15,7 @@ ibs_add_test_suite(ibs_core_tests
         unit/core/audio/WaveformPyramidTest.cpp
         unit/core/bmson/BmsonEquivalenceTest.cpp
         unit/core/chart/ChartEditingTest.cpp
+        unit/core/chart/CutLayoutTest.cpp
         unit/core/bmson/BmsonExportTest.cpp
         unit/core/bmson/BmsonImportTest.cpp
         unit/core/midi/MidiExporterTest.cpp

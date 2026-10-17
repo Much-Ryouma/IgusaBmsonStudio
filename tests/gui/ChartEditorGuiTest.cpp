@@ -2,7 +2,12 @@
 #include <QLabel>
 #include <QLineEdit>
 #include <QListWidget>
+#include <QDir>
 #include <QMessageBox>
+#include <QUrl>
+#include <QScrollBar>
+#include <QDropEvent>
+#include <QMimeData>
 #include <QTableWidget>
 #include <QTabWidget>
 #include <QTest>
@@ -12,12 +17,15 @@
 
 #include "BgaPanel.hpp"
 #include "ChartEditorWidget.hpp"
+#include "ChartMinimap.hpp"
 #include "GuiFixture.hpp"
+#include "QtText.hpp"
 #include "NullTestDialog.hpp"
 #include "SongSettingsDialog.hpp"
 #include "StatisticsDialog.hpp"
 #include "TimelineScrollBar.hpp"
 #include "WaveformSlicerWidget.hpp"
+#include "ibs/app/BgaCommands.hpp"
 #include "ibs/core/timing/TimingEdits.hpp"
 #include "ibs/infra/fs/Utf8Path.hpp"
 
@@ -329,4 +337,209 @@ TEST(ChartEditorGui, GUI022_NullTestWithPlayerReportsRenderFailures) {
 }
 
 }  // namespace
+
+TEST(ChartEditorGui, GUI030_DraggingACutFromTheAssetColumnAssignsItToALane) {
+    ChartFixture fixture;
+    const auto lane3 = fixture.editor()->laneColumn(3);
+    const auto lane5 = fixture.editor()->laneColumn(5);
+    const auto y = [&](core::CutPointId cut) {
+        return fixture.editor()->yOf(static_cast<double>(fixture.project().absolutePulseOf(fixture.project().cutPoint(cut))));
+    };
+
+    GuiFixture::drag(fixture.editor(), fixture.cutMark(fixture.cuts[0]), QPointF(lane3->left + 5.0, y(fixture.cuts[0])));
+    ASSERT_EQ(fixture.project().notesOf(fixture.cuts[0]).size(), 1u);
+    EXPECT_EQ(fixture.project().note(fixture.project().notesOf(fixture.cuts[0]).front()).lane, 3);
+
+    fixture.controller().setSelectedCuts({fixture.cuts[1], fixture.cuts[2]});
+    GuiFixture::drag(fixture.editor(), fixture.cutMark(fixture.cuts[1]), QPointF(lane5->left + 5.0, y(fixture.cuts[1])));
+    for (const auto cut : {fixture.cuts[1], fixture.cuts[2]}) {
+        ASSERT_EQ(fixture.project().notesOf(cut).size(), 1u);
+        EXPECT_EQ(fixture.project().note(fixture.project().notesOf(cut).front()).lane, 5);
+    }
+
+    const auto before = fixture.project().notes().size();
+    GuiFixture::drag(fixture.editor(), fixture.cutMark(fixture.cuts[0]), fixture.cutMark(fixture.cuts[0]) + QPointF(0.0, 30.0));
+    EXPECT_EQ(fixture.project().notes().size(), before);
+}
+
+TEST(ChartEditorGui, GUI031_MinimapAndHorizontalBarScrollTheChart) {
+    ChartFixture fixture;
+    auto* minimap = fixture.window().chartMinimap();
+    ASSERT_NE(minimap, nullptr);
+    fixture.settle();
+
+    const double target = 1440.0;
+    GuiFixture::send(minimap, QEvent::MouseButtonPress, QPointF(10.0, minimap->yOfPulse(target)), Qt::LeftButton, Qt::LeftButton);
+    GuiFixture::send(minimap, QEvent::MouseButtonRelease, QPointF(10.0, minimap->yOfPulse(target)), Qt::LeftButton, Qt::NoButton);
+    const double center = fixture.editor()->viewport().originPulse() + fixture.editor()->visibleSpanPulses() / 2.0;
+    EXPECT_NEAR(center, target, fixture.editor()->contentEndPulse() / minimap->height() * 2.0 + 1.0);
+    const QRectF view = minimap->viewportRect();
+    EXPECT_LE(view.top(), minimap->yOfPulse(target));
+    EXPECT_GE(view.bottom(), minimap->yOfPulse(target));
+
+    auto* bar = fixture.window().chartHorizontalScroll();
+    fixture.window().resize(560, 900);
+    fixture.settle();
+    fixture.editor()->repaint();
+    fixture.settle();
+    ASSERT_GT(fixture.editor()->columnsWidth(), fixture.editor()->visibleColumnsWidth());
+    EXPECT_FALSE(bar->isHidden());
+    EXPECT_GT(bar->maximum(), 0);
+    bar->setValue(bar->maximum());
+    EXPECT_DOUBLE_EQ(fixture.editor()->horizontalOffset(), static_cast<double>(bar->maximum()));
+    const auto asset = fixture.editor()->assetColumn(fixture.asset);
+    EXPECT_LE(asset->left + asset->width, fixture.editor()->width());
+
+    fixture.window().resize(1600, 900);
+    fixture.settle();
+    fixture.editor()->repaint();
+    EXPECT_TRUE(bar->isHidden());
+}
+
+namespace {
+
+void dropFiles(QWidget* target, const QList<QUrl>& urls) {
+    QMimeData data;
+    data.setUrls(urls);
+    const QPointF at(target->width() / 2.0, target->height() / 2.0);
+    QDragEnterEvent enter(at.toPoint(), Qt::CopyAction, &data, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(target, &enter);
+    ASSERT_TRUE(enter.isAccepted());
+    QDropEvent drop(at, Qt::CopyAction, &data, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(target, &drop);
+}
+
+QUrl localUrl(const std::filesystem::path& path) {
+    return QUrl::fromLocalFile(QDir::current().absoluteFilePath(toQString(path)));
+}
+
+}  // namespace
+
+TEST(ChartEditorGui, GUI032_DroppingImagesOnTheBgaListAddsThem) {
+    ChartFixture fixture;
+    auto* panel = fixture.window().bgaPanel();
+    QString warning;
+
+    QMimeData text;
+    text.setUrls({localUrl(kChartDirectory / "notes.txt")});
+    QDragEnterEvent rejected(QPoint(5, 5), Qt::CopyAction, &text, Qt::LeftButton, Qt::NoModifier);
+    QApplication::sendEvent(panel, &rejected);
+    EXPECT_FALSE(rejected.isAccepted());
+
+    fixture.controller().document().replace(fixture.project(), std::nullopt);
+    bool asked = false;
+    panel->setSaveRequest([&asked] {
+        asked = true;
+        return false;
+    });
+    QTimer::singleShot(0, [&warning] {
+        auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        ASSERT_NE(box, nullptr);
+        warning = box->text();
+        box->accept();
+    });
+    dropFiles(panel, {localUrl(kChartDirectory / "movie" / "bg.webm")});
+    EXPECT_TRUE(asked);
+    EXPECT_TRUE(warning.contains(QStringLiteral("保存先")));
+    EXPECT_TRUE(fixture.project().bga.headers.empty());
+
+    panel->setSaveRequest([&fixture] {
+        static_cast<void>(fixture.controller().save(toPath(QDir::current().absoluteFilePath(toQString(kChartDirectory / "song.bmson")))));
+        return true;
+    });
+    QTimer::singleShot(0, [] {
+        if (auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget())) {
+            box->accept();
+        }
+    });
+    dropFiles(panel, {localUrl(kChartDirectory / "movie" / "bg.webm"), localUrl(kChartDirectory / "img" / "title.png")});
+    ASSERT_EQ(fixture.project().bga.headers.size(), 2u);
+    EXPECT_EQ(fixture.project().bga.headers.front().name, "movie/bg.webm");
+    EXPECT_EQ(panel->list()->count(), 2);
+}
+
+TEST(ChartEditorGui, GUI033_OpeningWarnsAboutBgaOutsideTheChartFolder) {
+    ChartFixture fixture;
+    app::addBgaImage(fixture.controller().document(), "drums.wav");
+    app::addBgaImage(fixture.controller().document(), "../shared/intro.mp4");
+    QString warning;
+    QTimer::singleShot(0, [&warning] {
+        auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        ASSERT_NE(box, nullptr);
+        warning = box->text();
+        box->accept();
+    });
+
+    const auto unreachable = fixture.window().warnUnreachableBga();
+
+    EXPECT_EQ(unreachable, std::vector<std::string>{"../shared/intro.mp4"});
+    EXPECT_TRUE(warning.contains(QStringLiteral("../shared/intro.mp4")));
+    EXPECT_FALSE(warning.contains(QStringLiteral("drums.wav")));
+}
+
+TEST(ChartEditorGui, GUI034_ClickingALaneNoteAuditionsItsSliceAndDroppingItOutsideUnassigns) {
+    ChartFixture fixture;
+    const auto note = app::assignLanes(fixture.controller().document(), {fixture.cuts[1]}, 4).front();
+    fixture.controller().stopPlayback();
+    fixture.output().playing = false;
+
+    GuiFixture::send(fixture.editor(), QEvent::MouseButtonPress, fixture.noteHead(note), Qt::LeftButton, Qt::LeftButton);
+    GuiFixture::send(fixture.editor(), QEvent::MouseButtonRelease, fixture.noteHead(note), Qt::LeftButton, Qt::NoButton);
+    EXPECT_TRUE(fixture.output().playing);
+    EXPECT_EQ(fixture.controller().cursorPulse(), 1440);
+    EXPECT_EQ(fixture.project().notes().size(), 1u);
+
+    const auto asset = fixture.editor()->assetColumn(fixture.asset);
+    GuiFixture::drag(fixture.editor(), fixture.noteHead(note), QPointF(asset->left + asset->width / 2.0, fixture.noteHead(note).y()));
+    EXPECT_TRUE(fixture.project().notes().empty());
+    EXPECT_EQ(fixture.controller().document().undoLabel(), "ノーツの削除");
+
+    const auto again = app::assignLanes(fixture.controller().document(), {fixture.cuts[1]}, 4).front();
+    const auto lane6 = fixture.editor()->laneColumn(6);
+    GuiFixture::drag(fixture.editor(), fixture.noteHead(again), QPointF(lane6->left + 5.0, fixture.noteHead(again).y()));
+    ASSERT_EQ(fixture.project().notes().size(), 1u);
+    EXPECT_EQ(fixture.project().notes().front().lane, 6);
+}
+
+TEST(ChartEditorGui, GUI035_SelectedNotesMoveTogetherAndStayOnTheLanes) {
+    ChartFixture fixture;
+    auto& document = fixture.controller().document();
+    const auto a = app::assignLanes(document, {fixture.cuts[0]}, 2).front();
+    const auto b = app::assignLanes(document, {fixture.cuts[1]}, 4).front();
+    const auto c = app::assignLanes(document, {fixture.cuts[2]}, 7).front();
+    fixture.controller().setSelectedNotes({a, b, c});
+    const auto lane = [&](core::NoteId note) { return fixture.project().note(note).lane; };
+
+    const auto lane6 = fixture.editor()->laneColumn(6);
+    GuiFixture::drag(fixture.editor(), fixture.noteHead(a), QPointF(lane6->left + lane6->width / 2.0, fixture.noteHead(a).y()));
+    EXPECT_EQ(lane(a), 4);
+    EXPECT_EQ(lane(b), 6);
+    EXPECT_EQ(lane(c), 9);
+    EXPECT_EQ(fixture.controller().selectedNotes().size(), 3u);
+
+    GuiFixture::drag(fixture.editor(), fixture.noteHead(a), QPointF(5.0, fixture.noteHead(a).y()));
+    EXPECT_EQ(fixture.project().notes().size(), 3u);
+    EXPECT_EQ(lane(a), 1);
+    EXPECT_EQ(lane(b), 3);
+    EXPECT_EQ(lane(c), 6);
+    EXPECT_EQ(fixture.controller().document().undoLabel(), "レーンの変更");
+}
+
+TEST(ChartEditorGui, GUI036_TopEdgeDragMovesTheLaneAndShiftDoubleClickTogglesLongNote) {
+    ChartFixture fixture;
+    const auto note = app::assignLanes(fixture.controller().document(), {fixture.cuts[0]}, 2).front();
+    const auto lane5 = fixture.editor()->laneColumn(5);
+    const QPointF top = fixture.noteHead(note) - QPointF(0.0, 3.0);
+
+    GuiFixture::drag(fixture.editor(), top, QPointF(lane5->left + lane5->width / 2.0, top.y() - 20.0));
+    EXPECT_EQ(fixture.project().note(note).lane, 5);
+    EXPECT_EQ(fixture.project().note(note).lengthPulses, 0);
+
+    GuiFixture::doubleClick(fixture.editor(), fixture.noteHead(note), Qt::ShiftModifier);
+    EXPECT_EQ(fixture.project().note(note).lengthPulses, 240);
+    EXPECT_EQ(fixture.controller().document().undoLabel(), "ロングノーツの切り替え");
+    GuiFixture::doubleClick(fixture.editor(), fixture.noteHead(note), Qt::ShiftModifier);
+    EXPECT_EQ(fixture.project().note(note).lengthPulses, 0);
+}
+
 }  // namespace ibs::gui::testing

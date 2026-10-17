@@ -186,5 +186,22 @@ TEST(ChartEditing, CHE011_FoldingBgmColumnsLeavesOnlyPlayableNotes) {
     EXPECT_TRUE(song.project.containsNote(layeredKey));
 }
 
+TEST(ChartEditing, CHE012_LongNoteLastsUntilTheSliceEndsOrTheNextNoteInTheLane) {
+    Project project;
+    project.timing.resolution = 240;
+    const auto placement = project.addPlacement(project.addAsset("lead.wav"), 960, 0);
+    const auto head = project.headCutPointOf(placement);
+    const auto second = project.addCutPoint(placement, 480, CutOrigin::Auto);
+    const auto third = project.addCutPoint(placement, 600, CutOrigin::Auto);
+    const auto first = project.addNote(head, 1, 0);
+    const auto middle = project.addNote(second, 2, 0);
+    const auto last = project.addNote(third, 2, 0);
+
+    EXPECT_EQ(longNoteLengthFor(project, first, 240, 60), 480);
+    EXPECT_EQ(longNoteLengthFor(project, middle, 240, 60), 60);
+    EXPECT_EQ(longNoteLengthFor(project, last, 240, 60), 240);
+    EXPECT_EQ(longNoteLengthFor(project, middle, 240, 120), 0);
+}
+
 }  // namespace
 }  // namespace ibs::core

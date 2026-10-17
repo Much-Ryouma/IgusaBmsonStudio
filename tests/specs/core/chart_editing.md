@@ -1,7 +1,7 @@
 # 譜面の編集 (core/chart)
 
 - 対象: `assignLane` / `clearAssignment` / `cutPointsInSongOrder` / `copyPattern` / `pastePattern` / `mirroredLanes` / `swappedLanes` / `randomizedLanes` / `placementsDesyncedBy` / `keepCutTimesAfterTempoChange` / `foldBgmColumns` / `playableNotesPerBar` / `recommendedTotal`
-- テストコード: `tests/unit/core/chart/ChartEditingTest.cpp`
+- テストコード: `tests/unit/core/chart/ChartEditingTest.cpp`、`tests/unit/core/chart/CutLayoutTest.cpp`(CLY)
 - 根拠: SPEC.md §6.4（割当モード、コピー＆ペースト、変形、BPM を変えたときの切断点）
 - 共通の前提: 120 BPM・resolution 240。bass.wav と lead.wav をどちらも pulse 0 に配置。モードは beat-7k（鍵盤 1〜7、スクラッチ 8、BGM 列は 9 以上）
 
@@ -26,3 +26,15 @@ BPM・STOP を変えたときに、音とずれる配置を見つけ、時間を
 | CHE-009 | bass（0 に配置、960 に自動の切断点、影響ありの印） | 480 から 60 BPM にして「時間を保つ」 | 切断点が 720 に動く（配置の頭から 2.0 秒のまま）。自動のまま、印は消える |
 | CHE-010 | 240 にレーン 1 のレイヤーノーツ 2 つ、1200 にレーン 2、2000 にレーン 12（BGM 列） | 小節ごとのノーツ数 / ノーツ 1000 個の total の目安 | 1 小節目 1、2 小節目 1（レイヤーは 1 つ、BGM 列は数えない）/ 460.9 |
 | CHE-011 | レーン 3 のノーツ、レーン 12 とレーン 1 が重なった切断点、レーン 25 のノーツ | BGM 列を BGM に戻す | 12 と 25 の 2 つが消え（割当のない切断点は BGM として書き出される）、レーン 3 と 1 は残る |
+| CHE-012 | 960 の配置に切断点 0・480・600。0 にレーン 1、480 と 600 にレーン 2 | ロングノーツにするときの長さ（最後のスライスの長さ 240、次のノーツとの間 60）/ 間を 120 にする | 0 のノーツは 480（次の切断点まで）、480 のノーツは 60（スライスは 120 だが、同じレーンの 600 のノーツの 60 手前まで）、600 のノーツは 240（最後のスライス）/ 480 のノーツは 0（入らない） |
+
+## 切断点の配置のコピー (CLY)
+
+前提: drums を 3840 と 0、hats を 0 と 3840、other を 0 と 1920、single を 0 に配置（配置を足す順は位置の順と限らない）。
+
+| ID | 前提 | 操作 | 期待結果 |
+|---|---|---|---|
+| CLY-001 | 上記 | drums の配置の位置 / drums と同じ位置に置かれた素材 / single と同じ素材 | 0, 3840（位置の順）/ hats だけ（other は 1920 が違う）/ なし（single だけ 0 の配置が 1 つ） |
+| CLY-002 | drums の 0 の配置に 240（自動）と 480（手動、レーン 1）、3840 の配置に 120。hats の 0 の配置に 360（レーン 3）、3840 の先頭にレーン 5。hats の 0 の配置にテンポ変更の印 | drums から hats へ写す | 配置 2 つ、写した切断点 3、外した割り当て 2。hats は 0, 240, 480 と 0, 120 になり、480 は手動のまま。ノーツは drums のレーン 1 だけ残る（写し先の割り当ては外す。写し元の割り当ては写さない）。印は写し元に合わせて消える |
+| CLY-003 | 上記 | drums から other へ / drums から drums へ写す | どちらも `std::invalid_argument`、切断点は変わらない |
+

@@ -127,6 +127,22 @@ app::SaveOutcome StudioController::save(const std::filesystem::path& path) {
     return outcome;
 }
 
+app::BgaImportOutcome StudioController::importBga(const std::filesystem::path& file, app::OutsideFilePolicy policy) {
+    auto outcome = importer_.importBga(document_, file, policy);
+    if (outcome.imageId) {
+        selectBgaImage(outcome.imageId);
+    }
+    return outcome;
+}
+
+std::vector<std::string> StudioController::unreachableBgaFiles() const {
+    if (!document_.path()) {
+        return {};
+    }
+    const auto folder = storage_.fileSystemAt(document_.chartDirectory());
+    return folder ? core::unreachableBgaFiles(document_.project().bga, *folder) : std::vector<std::string>{};
+}
+
 app::ImportOutcome StudioController::importAudio(const std::filesystem::path& file, app::OutsideFilePolicy policy) {
     auto outcome = importer_.import(document_, file, policy);
     if (outcome.assetId) {

@@ -53,6 +53,9 @@ private:
         bool moved = false;
     };
 
+    void showAssetMenu(core::AssetId asset, QPoint globalPosition);
+    void removeAssetWithConfirmation(core::AssetId asset);
+    void copyCutLayoutFrom(core::AssetId source);
     [[nodiscard]] std::optional<std::size_t> rowAt(double y) const;
     [[nodiscard]] std::optional<core::PlacementId> placementAt(QPointF point) const;
     [[nodiscard]] core::Pulse placementEnd(const core::Placement& placement) const;

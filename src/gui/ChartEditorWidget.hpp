@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+#include <map>
 #include <optional>
 #include <vector>
 
@@ -51,6 +53,14 @@ public:
     [[nodiscard]] double pulseAtY(double y) const;
     void scrollToPulse(double pulse);
 
+    [[nodiscard]] double contentEndPulse() const;
+    [[nodiscard]] double visibleSpanPulses() const;
+    [[nodiscard]] double columnsWidth() const;
+    [[nodiscard]] double visibleColumnsWidth() const;
+    [[nodiscard]] double horizontalOffset() const noexcept { return horizontalOffset_; }
+    void setHorizontalOffset(double offset);
+    void setViewObserver(std::function<void()> observer) { viewObserver_ = std::move(observer); }
+
     void assignSelected(int lane);
     void clearSelected();
     void stepCut(int direction);
@@ -70,12 +80,13 @@ protected:
     bool focusNextPrevChild(bool next) override;
 
 private:
-    enum class DragKind { None, NoteLane, NoteLength, CutMove, BgaMove, RubberBand };
+    enum class DragKind { None, NoteLane, NoteLength, CutMove, CutAssign, BgaMove, RubberBand };
     struct Drag {
         DragKind kind = DragKind::None;
         QPointF origin;
         QPointF current;
         core::NoteId note;
+        std::vector<core::NoteId> group;
         core::CutPointId cut;
         BgaEventRef bga;
         core::Pulse pulse = 0;
@@ -83,7 +94,9 @@ private:
     };
 
     [[nodiscard]] std::optional<Column> columnAt(double x) const;
-    [[nodiscard]] std::optional<core::NoteId> noteAt(QPointF point, bool* onLengthHandle = nullptr) const;
+    [[nodiscard]] std::vector<Column> laneColumns() const;
+    [[nodiscard]] std::map<core::NoteId, int> groupLaneTargets(const Drag& drag) const;
+    [[nodiscard]] std::optional<core::NoteId> noteAt(QPointF point) const;
     [[nodiscard]] std::optional<core::CutPointId> cutMarkAt(QPointF point) const;
     [[nodiscard]] double timelineHeight() const;
     [[nodiscard]] int scratchLane() const;
@@ -95,6 +108,7 @@ private:
     void paintBga(QPainter& painter, const std::vector<Column>& columns);
     [[nodiscard]] std::optional<BgaEventRef> bgaEventAt(QPointF point) const;
     void paintDensity(QPainter& painter);
+    void paintAssignPreview(QPainter& painter);
     void paintHeader(QPainter& painter, const std::vector<Column>& columns);
     void selectInRubberBand(const QRectF& area, bool additive);
     void auditionCut(core::CutPointId cut);
@@ -107,6 +121,7 @@ private:
     bool autoAdvance_ = true;
     bool bgmCollapsed_ = false;
     double horizontalOffset_ = 0.0;
+    std::function<void()> viewObserver_;
     Drag drag_;
 };
 

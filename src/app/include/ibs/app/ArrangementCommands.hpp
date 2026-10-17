@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "ibs/app/EditorDocument.hpp"
+#include "ibs/core/chart/CutLayout.hpp"
 
 namespace ibs::app {
 
@@ -12,6 +13,8 @@ core::PlacementId placeAsset(EditorDocument& document, core::AssetId assetId, co
 void movePlacement(EditorDocument& document, core::PlacementId placementId, core::Pulse startPulse);
 core::PlacementId duplicatePlacement(EditorDocument& document, core::PlacementId placementId, core::Pulse startPulse);
 void removePlacement(EditorDocument& document, core::PlacementId placementId);
+void removeAsset(EditorDocument& document, core::AssetId assetId);
+core::CutLayoutCopy copyCutLayout(EditorDocument& document, core::AssetId source, const std::vector<core::AssetId>& targets);
 
 core::CutPointId addManualCut(EditorDocument& document, core::PlacementId placementId, core::Pulse songPulse);
 void moveCut(EditorDocument& document, core::CutPointId cutPointId, core::Pulse songPulse);

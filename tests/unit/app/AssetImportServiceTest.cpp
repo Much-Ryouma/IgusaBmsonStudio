@@ -77,5 +77,36 @@ TEST(AssetImportService, IMP005_NeedsAChartLocationFirst) {
     EXPECT_FALSE(outcome.error.empty());
 }
 
+TEST(AssetImportService, IMP006_ImportsBgaFilesLikeAudioButIntoTheBgaList) {
+    FakeAssetFileStore files;
+    AssetImportService service(files);
+    auto document = documentAtChart();
+    EditorDocument unsaved;
+
+    const auto inside = service.importBga(document, kChart / "movie" / "bg.webm", OutsideFilePolicy::Reject);
+    const auto again = service.importBga(document, kChart / "movie" / "bg.webm", OutsideFilePolicy::Reject);
+    const auto rejected = service.importBga(document, std::filesystem::path("work") / "logo.png", OutsideFilePolicy::Reject);
+    const auto copied = service.importBga(document, std::filesystem::path("work") / "logo.png", OutsideFilePolicy::Copy);
+    const auto notImage = service.importBga(document, kChart / "kick.wav", OutsideFilePolicy::Copy);
+    const auto noFolder = service.importBga(unsaved, kChart / "bg.png", OutsideFilePolicy::Copy);
+
+    ASSERT_TRUE(inside.imageId.has_value()) << inside.error;
+    EXPECT_EQ(inside.name, "movie/bg.webm");
+    EXPECT_TRUE(again.alreadyImported);
+    EXPECT_EQ(again.imageId, inside.imageId);
+    EXPECT_FALSE(rejected.imageId.has_value());
+    EXPECT_FALSE(rejected.error.empty());
+    ASSERT_TRUE(copied.imageId.has_value()) << copied.error;
+    EXPECT_TRUE(copied.copied);
+    EXPECT_EQ(copied.name, "logo.png");
+    ASSERT_EQ(files.copies.size(), 1u);
+    EXPECT_EQ(files.copies.front().second, kChart / "logo.png");
+    EXPECT_FALSE(notImage.imageId.has_value());
+    EXPECT_FALSE(noFolder.imageId.has_value());
+    EXPECT_EQ(document.project().bga.headers.size(), 2u);
+    EXPECT_TRUE(isBgaFile("A.PNG"));
+    EXPECT_FALSE(isBgaFile("song.bmson"));
+}
+
 }  // namespace
 }  // namespace ibs::app

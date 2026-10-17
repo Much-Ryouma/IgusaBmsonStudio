@@ -11,7 +11,11 @@ add_library(ibs_gui STATIC
     BgaPanel.cpp
     BgaPanel.hpp
     ChartEditorWidget.cpp
+    CutLayoutCopyDialog.cpp
+    CutLayoutCopyDialog.hpp
     ChartEditorWidget.hpp
+    ChartMinimap.cpp
+    ChartMinimap.hpp
     MainWindow.cpp
     MainWindow.hpp
     QtProcessLauncher.hpp

@@ -51,6 +51,32 @@ std::size_t clearAssignment(Project& project, CutPointId cutPointId) {
     return notes.size();
 }
 
+// Why not 決まった長さ（1 拍など）にする: ロングノーツは「そのスライスを押し続ける間鳴る」ものなので、
+// スライスの終わり（同じ配置の次の切断点）までにする。同じレーンの次のノーツには clearance だけ手前で止める（V05 を避ける）
+Pulse longNoteLengthFor(const Project& project, NoteId noteId, Pulse lastSliceLength, Pulse clearance) {
+    const auto& note = project.note(noteId);
+    const auto& cut = project.cutPoint(note.cutPointId);
+    const Pulse head = project.absolutePulseOf(cut);
+    Pulse length = lastSliceLength;
+    for (const auto other : project.cutPointsOf(cut.placementId)) {
+        const Pulse offset = project.cutPoint(other).offsetPulses;
+        if (offset > cut.offsetPulses) {
+            length = offset - cut.offsetPulses;
+            break;
+        }
+    }
+    for (const auto& other : project.notes()) {
+        if (other.lane != note.lane || other.id == note.id) {
+            continue;
+        }
+        const Pulse otherHead = project.absolutePulseOf(project.cutPoint(other.cutPointId));
+        if (otherHead > head) {
+            length = std::min(length, otherHead - head - clearance);
+        }
+    }
+    return std::max<Pulse>(0, length);
+}
+
 std::vector<CutPointId> cutPointsInSongOrder(const Project& project) {
     std::vector<std::tuple<Pulse, std::uint64_t, Pulse, CutPointId>> ordered;
     for (const auto& cut : project.cutPoints()) {

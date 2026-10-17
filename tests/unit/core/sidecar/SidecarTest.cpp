@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include "../../support/FakeFileSystem.hpp"
+
 #include "ibs/core/model/BgaEditing.hpp"
 #include "ibs/core/sidecar/Sidecar.hpp"
 
@@ -123,6 +125,17 @@ TEST(BgaEditing, BGE003_RemovingAHeaderRemovesItsEvents) {
     EXPECT_TRUE(bga.bgaEvents.empty());
     EXPECT_EQ(bga.layerEvents.size(), 1u);
     EXPECT_THROW(removeBgaHeader(bga, image), std::invalid_argument);
+}
+
+TEST(BgaEditing, BGE004_ListsBgaFilesThatAreNotInTheChartFolder) {
+    Bga bga;
+    addBgaHeader(bga, "movie.webm");
+    addBgaHeader(bga, "img/bg.png");
+    addBgaHeader(bga, "../other/intro.mp4");
+    addBgaHeader(bga, "gone.png");
+    const ibs::testing::FakeFileSystem folder{{"movie.webm", "img/bg.png"}};
+
+    EXPECT_EQ(unreachableBgaFiles(bga, folder), (std::vector<std::string>{"../other/intro.mp4", "gone.png"}));
 }
 
 }  // namespace

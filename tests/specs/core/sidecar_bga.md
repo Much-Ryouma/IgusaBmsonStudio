@@ -25,3 +25,4 @@ BGA の画像とイベントを、壊れた参照（存在しない画像 id）�
 | BGE-001 | id 5 の intro.png がある | main.png を追加 / intro.png を追加 / 空の名前 | 6（最大 + 1）/ 既存の 5 を返し、増えない / `std::invalid_argument` |
 | BGE-002 | a.png と b.png | BGA に 960:a → 0:a → 960:b、POOR に 960:a / LAYER に存在しない id / 0 を 960 へ動かす / 960 を 1920 へ / 0 を 2 回消す | BGA は 0:a、960:b（同じ位置は置き換え、y 順）、POOR は別に 1 つ / `std::invalid_argument` / 埋まっているので `std::invalid_argument` / 1920:b になる / 2 回目は `std::invalid_argument` |
 | BGE-003 | BGA に a、LAYER に b のイベント | a を削除 → もう一度削除 | a の画像とイベントが消え、b は残る → `std::invalid_argument` |
+| BGE-004 | 譜面のフォルダに movie.webm と img/bg.png がある。BGA に movie.webm・img/bg.png・../other/intro.mp4・gone.png | 譜面のフォルダから届かない BGA を探す | ../other/intro.mp4（フォルダの外）と gone.png（ない）。サブフォルダの img/bg.png は届く |

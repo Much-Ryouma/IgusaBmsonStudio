@@ -9,6 +9,7 @@ add_library(ibs_core STATIC
     src/audio/WaveformPyramid.cpp
     src/chart/ChartEditing.cpp
     src/chart/ChartStatistics.cpp
+    src/chart/CutLayout.cpp
     src/bmson/BmsonEquivalence.cpp
     src/bmson/BmsonExporter.cpp
     src/bmson/BmsonImporter.cpp

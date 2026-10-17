@@ -1,6 +1,7 @@
 #include "ibs/app/ChartCommands.hpp"
 
 #include <algorithm>
+#include <stdexcept>
 
 namespace ibs::app {
 
@@ -47,6 +48,17 @@ void changeNoteLane(EditorDocument& document, core::NoteId note, int lane) {
         return;
     }
     document.apply("レーンの変更", [&](core::Project& project) { project.remapNoteLanes({{note, lane}}); });
+}
+
+core::Pulse toggleLongNote(EditorDocument& document, core::NoteId note, core::Pulse lastSliceLength, core::Pulse clearance) {
+    const auto length = document.project().note(note).lengthPulses > 0
+                            ? core::Pulse{0}
+                            : core::longNoteLengthFor(document.project(), note, lastSliceLength, clearance);
+    if (length == 0 && document.project().note(note).lengthPulses == 0) {
+        throw std::invalid_argument("同じレーンのすぐ上に次のノーツがあるため、ロングノーツにできません");
+    }
+    document.apply("ロングノーツの切り替え", [&](core::Project& project) { project.setNoteLength(note, length); });
+    return length;
 }
 
 void changeNoteLength(EditorDocument& document, core::NoteId note, core::Pulse lengthPulses) {

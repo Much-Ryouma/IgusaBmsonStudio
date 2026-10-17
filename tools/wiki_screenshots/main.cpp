@@ -25,6 +25,7 @@
 #include "ArrangerWidget.hpp"
 #include "BgaPanel.hpp"
 #include "ChartEditorWidget.hpp"
+#include "ChartMinimap.hpp"
 #include "MainWindow.hpp"
 #include "NullTestDialog.hpp"
 #include "QtProcessLauncher.hpp"
@@ -316,6 +317,7 @@ int main(int argc, char** argv) {
     shot.add("main_chart", "asset_columns", assetColumns);
     shot.add("main_chart", "density",
              QRect(editorOrigin + QPoint(editor->width() - Editor::kDensityWidth, 0), QSize(Editor::kDensityWidth, editor->height())));
+    shot.region("main_chart", "minimap", &window, window.chartMinimap());
     shot.region("main_chart", "bga_panel", &window, window.bgaPanel());
     shot.region("main_chart", "statusbar", &window, window.statusBar());
     shot.add("main_chart", "header", QRect(editorOrigin, QSize(editor->width(), Editor::kHeaderHeight)));

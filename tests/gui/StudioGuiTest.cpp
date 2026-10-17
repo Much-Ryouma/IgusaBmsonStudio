@@ -1,23 +1,31 @@
+#include <functional>
+
+#include <QAbstractButton>
 #include <QAction>
-#include <QLabel>
+#include <QContextMenuEvent>
 #include <QDir>
 #include <QFile>
+#include <QLabel>
+#include <QListWidget>
 #include <QMenu>
-#include <QTextBrowser>
+#include <QMessageBox>
 #include <QPushButton>
 #include <QSlider>
 #include <QTest>
+#include <QTextBrowser>
+#include <QTimer>
 
 #include <gtest/gtest.h>
 
 #include "AboutDialog.hpp"
 #include "AppIcon.hpp"
 #include "ArrangerWidget.hpp"
+#include "CutLayoutCopyDialog.hpp"
 #include "GuiFixture.hpp"
+#include "SlicerPanel.hpp"
 #include "StudioSettings.hpp"
 #include "StudioSettingsDialog.hpp"
 #include "ibs/core/BuildInfo.hpp"
-#include "SlicerPanel.hpp"
 
 namespace ibs::gui::testing {
 namespace {
@@ -231,4 +239,102 @@ TEST(StudioGui, GUI027_SettingsAreKeptInAnIniFileThatCanBeEditedByHand) {
 }
 
 }  // namespace
+
+namespace {
+
+void answerNextMessageBox(QMessageBox::StandardButton button, QString* text = nullptr) {
+    QTimer::singleShot(0, [button, text] {
+        auto* box = qobject_cast<QMessageBox*>(QApplication::activeModalWidget());
+        ASSERT_NE(box, nullptr);
+        if (text != nullptr) {
+            *text = box->text();
+        }
+        box->button(button)->click();
+    });
+}
+
+void chooseFromContextMenu(QWidget* widget, QPoint at, const QString& actionText, const std::function<void()>& before = {}) {
+    QTimer::singleShot(0, [actionText, before] {
+        auto* menu = qobject_cast<QMenu*>(QApplication::activePopupWidget());
+        ASSERT_NE(menu, nullptr);
+        QAction* chosen = nullptr;
+        for (auto* action : menu->actions()) {
+            if (action->text() == actionText) {
+                chosen = action;
+            }
+        }
+        ASSERT_NE(chosen, nullptr) << actionText.toStdString();
+        if (before) {
+            before();
+        }
+        menu->hide();
+        chosen->trigger();
+    });
+    QContextMenuEvent event(QContextMenuEvent::Mouse, at, widget->mapToGlobal(at));
+    QApplication::sendEvent(widget, &event);
+}
+
+QPoint assetHeader(GuiFixture& fixture, std::size_t row) {
+    return QPoint(30, fixture.window().arranger()->rowTop(row) + ArrangerWidget::kRowHeight / 2);
+}
+
+}  // namespace
+
+TEST(StudioGui, GUI028_RemovingAnAssetFromItsHeaderAsksFirst) {
+    GuiFixture fixture;
+    QString question;
+    chooseFromContextMenu(fixture.window().arranger(), assetHeader(fixture, 0), QStringLiteral("音源定義を削除する"),
+                          [&question] { answerNextMessageBox(QMessageBox::No, &question); });
+    EXPECT_EQ(fixture.project().assets().size(), 1u);
+    EXPECT_TRUE(question.contains(QStringLiteral("音源参照をbmsonファイルから削除しますか？ノーツの設定は無くなります(音源は消えません)")));
+
+    chooseFromContextMenu(fixture.window().arranger(), assetHeader(fixture, 0), QStringLiteral("音源定義を削除する"),
+                          [] { answerNextMessageBox(QMessageBox::Yes); });
+
+    EXPECT_TRUE(fixture.project().assets().empty());
+    EXPECT_TRUE(fixture.project().placements().empty());
+    EXPECT_EQ(fixture.controller().document().undoLabel(), "素材の削除");
+}
+
+TEST(StudioGui, GUI029_CopiesCutPositionsToAnAssetPlacedAtTheSameSpots) {
+    GuiFixture fixture;
+    const auto [hats, other] = fixture.controller().document().apply("素材", [](core::Project& project) {
+        const auto first = project.addAsset("hats.wav");
+        const auto second = project.addAsset("other.wav");
+        project.addPlacement(first, 960, 1);
+        project.addPlacement(second, 1920, 2);
+        return std::pair{first, second};
+    });
+    app::addManualCut(fixture.controller().document(), fixture.placement, 1200);
+    app::addManualCut(fixture.controller().document(), fixture.placement, 1440);
+    QString confirmation;
+    int listed = -1;
+
+    chooseFromContextMenu(fixture.window().arranger(), assetHeader(fixture, 0), QStringLiteral("音源配置をコピーする…"), [&] {
+        QTimer::singleShot(0, [&] {
+            auto* dialog = qobject_cast<CutLayoutCopyDialog*>(QApplication::activeModalWidget());
+            ASSERT_NE(dialog, nullptr);
+            listed = dialog->list()->count();
+            EXPECT_FALSE(dialog->okButton()->isEnabled());
+            dialog->list()->item(0)->setCheckState(Qt::Checked);
+            ASSERT_TRUE(dialog->okButton()->isEnabled());
+            answerNextMessageBox(QMessageBox::Yes, &confirmation);
+            dialog->okButton()->click();
+        });
+    });
+
+    EXPECT_EQ(listed, 1);
+    EXPECT_EQ(confirmation, QStringLiteral("既存のノーツの設定は上書きされますがよろしいですか？"));
+    const auto& project = fixture.project();
+    for (const auto& placement : project.placements()) {
+        if (placement.assetId == hats) {
+            EXPECT_EQ(project.cutPointsOf(placement.id).size(), 3u);
+        }
+        if (placement.assetId == other) {
+            EXPECT_EQ(project.cutPointsOf(placement.id).size(), 1u);
+        }
+    }
+    EXPECT_EQ(fixture.controller().document().undoLabel(), "切断点のコピー");
+}
+
 }  // namespace ibs::gui::testing

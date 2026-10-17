@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <functional>
+#include <limits>
 #include <map>
 #include <set>
 
@@ -155,6 +156,41 @@ std::vector<ChartEditorWidget::Column> ChartEditorWidget::columns() const {
     return result;
 }
 
+double ChartEditorWidget::columnsWidth() const {
+    const auto cols = columns();
+    return cols.empty() ? 0.0 : cols.back().left + cols.back().width + horizontalOffset_ - (kRulerWidth + kTimingWidth);
+}
+
+double ChartEditorWidget::visibleColumnsWidth() const {
+    return std::max(1.0, static_cast<double>(width() - kRulerWidth - kTimingWidth - kDensityWidth));
+}
+
+void ChartEditorWidget::setHorizontalOffset(double offset) {
+    horizontalOffset_ = std::clamp(offset, 0.0, std::max(0.0, columnsWidth() - visibleColumnsWidth()));
+    update();
+}
+
+double ChartEditorWidget::visibleSpanPulses() const { return timelineHeight() * viewport_.pulsesPerPixel(); }
+
+// Why not 素材の長さまで含める: 素材の長さは読み込みが終わるまで分からず、終わるたびに全体の縮尺が変わるため、
+// 譜面に置いたもの（切断点・ノーツ・BGA・小節線）の最後から 2 小節先までを曲の範囲とする
+double ChartEditorWidget::contentEndPulse() const {
+    const auto& project = controller_.project();
+    core::Pulse end = controller_.cursorPulse();
+    for (const auto& cut : project.cutPoints()) {
+        end = std::max(end, project.absolutePulseOf(cut));
+    }
+    for (const auto& note : project.notes()) {
+        end = std::max(end, project.absolutePulseOf(project.cutPoint(note.cutPointId)) + note.lengthPulses);
+    }
+    for (const auto* events : {&project.bga.bgaEvents, &project.bga.layerEvents, &project.bga.poorEvents}) {
+        for (const auto& event : *events) {
+            end = std::max(end, event.y);
+        }
+    }
+    return static_cast<double>(end + 8 * std::max(1, project.timing.resolution));
+}
+
 std::optional<ChartEditorWidget::Column> ChartEditorWidget::laneColumn(int x) const {
     for (const auto& column : columns()) {
         if ((column.kind == Column::Kind::Lane || column.kind == Column::Kind::BgmColumn) && column.x == x) {
@@ -209,7 +245,60 @@ std::optional<ChartEditorWidget::Column> ChartEditorWidget::columnAt(double x) c
     return std::nullopt;
 }
 
-std::optional<core::NoteId> ChartEditorWidget::noteAt(QPointF point, bool* onLengthHandle) const {
+std::vector<ChartEditorWidget::Column> ChartEditorWidget::laneColumns() const {
+    std::vector<Column> lanes;
+    for (const auto& column : columns()) {
+        if (column.kind == Column::Kind::Lane || column.kind == Column::Kind::BgmColumn) {
+            lanes.push_back(column);
+        }
+    }
+    return lanes;
+}
+
+// Why not 離した列へそのまま移す: 複数のノーツは並びを保ったまま同じ列数だけずらし、どれか 1 つでもレーンの外へ出る分は
+// 端で止める（はみ出したノーツの割り当てが外れて素材列へ戻るのを防ぐため）
+std::map<core::NoteId, int> ChartEditorWidget::groupLaneTargets(const Drag& drag) const {
+    std::map<core::NoteId, int> targets;
+    const auto lanes = laneColumns();
+    if (lanes.empty() || drag.group.empty()) {
+        return targets;
+    }
+    const auto& project = controller_.project();
+    const auto indexOf = [&lanes](int lane) -> std::optional<std::ptrdiff_t> {
+        const auto found = std::find_if(lanes.begin(), lanes.end(), [lane](const Column& column) { return column.x == lane; });
+        return found == lanes.end() ? std::nullopt : std::optional<std::ptrdiff_t>(std::distance(lanes.begin(), found));
+    };
+    const auto pressed = indexOf(project.note(drag.note).lane);
+    if (!pressed) {
+        return targets;
+    }
+    std::ptrdiff_t hovered = 0;
+    double nearest = std::numeric_limits<double>::max();
+    for (std::size_t index = 0; index < lanes.size(); ++index) {
+        const double distance = std::abs(lanes[index].left + lanes[index].width / 2.0 - drag.current.x());
+        if (distance < nearest) {
+            nearest = distance;
+            hovered = static_cast<std::ptrdiff_t>(index);
+        }
+    }
+    std::ptrdiff_t lowest = std::numeric_limits<std::ptrdiff_t>::max();
+    std::ptrdiff_t highest = std::numeric_limits<std::ptrdiff_t>::min();
+    for (const auto note : drag.group) {
+        const auto index = project.containsNote(note) ? indexOf(project.note(note).lane) : std::nullopt;
+        if (!index) {
+            return targets;
+        }
+        lowest = std::min(lowest, *index);
+        highest = std::max(highest, *index);
+    }
+    const auto shift = std::clamp(hovered - *pressed, -lowest, static_cast<std::ptrdiff_t>(lanes.size()) - 1 - highest);
+    for (const auto note : drag.group) {
+        targets.emplace(note, lanes[static_cast<std::size_t>(*indexOf(project.note(note).lane) + shift)].x);
+    }
+    return targets;
+}
+
+std::optional<core::NoteId> ChartEditorWidget::noteAt(QPointF point) const {
     const auto column = columnAt(point.x());
     if (!column || column->kind == Column::Kind::Asset || column->kind == Column::Kind::Bga) {
         return std::nullopt;
@@ -224,9 +313,6 @@ std::optional<core::NoteId> ChartEditorWidget::noteAt(QPointF point, bool* onLen
                                ? yOf(static_cast<double>(project.absolutePulseOf(project.cutPoint(note.cutPointId)) + note.lengthPulses))
                                : head - kNoteHeight;
         if (point.y() >= top - kGrabDistancePixels && point.y() <= head + 1.0) {
-            if (onLengthHandle != nullptr) {
-                *onLengthHandle = point.y() <= top + 2.0;
-            }
             return note.id;
         }
     }
@@ -274,12 +360,18 @@ void ChartEditorWidget::paintEvent(QPaintEvent*) {
         const double y = yOf(*playhead);
         painter.drawLine(QPointF(kRulerWidth, y), QPointF(width() - kDensityWidth, y));
     }
+    if (drag_.kind == DragKind::CutAssign && drag_.moved) {
+        paintAssignPreview(painter);
+    }
     if (drag_.kind == DragKind::RubberBand && drag_.moved) {
         painter.fillRect(QRectF(drag_.origin, drag_.current).normalized(), QColor(255, 255, 255, 40));
     }
     painter.restore();
     paintDensity(painter);
     paintHeader(painter, cols);
+    if (viewObserver_) {
+        viewObserver_();
+    }
 }
 
 void ChartEditorWidget::paintGrid(QPainter& painter, const std::vector<Column>& cols) {
@@ -393,6 +485,7 @@ void ChartEditorWidget::paintNotes(QPainter& painter, const std::vector<Column>&
     for (const auto& note : project.notes()) {
         ++layers[{note.lane, project.absolutePulseOf(project.cutPoint(note.cutPointId))}];
     }
+    const auto groupTargets = drag_.kind == DragKind::NoteLane && drag_.moved ? groupLaneTargets(drag_) : std::map<core::NoteId, int>{};
     for (const auto& note : project.notes()) {
         const auto column = std::find_if(cols.begin(), cols.end(), [&](const Column& candidate) {
             return (candidate.kind == Column::Kind::Lane || candidate.kind == Column::Kind::BgmColumn) && candidate.x == note.lane;
@@ -402,14 +495,22 @@ void ChartEditorWidget::paintNotes(QPainter& painter, const std::vector<Column>&
         }
         const auto& cut = project.cutPoint(note.cutPointId);
         const core::Pulse y = project.absolutePulseOf(cut);
+        const bool grouped = drag_.moved && drag_.kind == DragKind::NoteLane && groupTargets.contains(note.id);
         const bool dragging = drag_.moved && drag_.note == note.id &&
                               (drag_.kind == DragKind::NoteLane || drag_.kind == DragKind::NoteLength);
         Column target = *column;
         core::Pulse length = note.lengthPulses;
-        if (dragging && drag_.kind == DragKind::NoteLane) {
+        bool leavingLanes = false;
+        if (grouped) {
+            if (const auto moved = laneColumn(groupTargets.at(note.id))) {
+                target = *moved;
+            }
+        } else if (dragging && drag_.kind == DragKind::NoteLane) {
             if (const auto hovered = columnAt(drag_.current.x());
                 hovered && (hovered->kind == Column::Kind::Lane || hovered->kind == Column::Kind::BgmColumn)) {
                 target = *hovered;
+            } else {
+                leavingLanes = true;
             }
         } else if (dragging) {
             length = std::max<core::Pulse>(0, drag_.pulse - y);
@@ -418,7 +519,10 @@ void ChartEditorWidget::paintNotes(QPainter& painter, const std::vector<Column>&
         if (head < kHeaderHeight - 400 || yOf(static_cast<double>(y + length)) > height() + 10) {
             continue;
         }
-        const QColor color = palette::assetColor(project.placement(cut.placementId).assetId).lighter(150);
+        QColor color = palette::assetColor(project.placement(cut.placementId).assetId).lighter(150);
+        if (leavingLanes) {
+            color.setAlpha(60);
+        }
         if (length > 0) {
             const double tail = yOf(static_cast<double>(y + length));
             QColor body = color;
@@ -436,6 +540,24 @@ void ChartEditorWidget::paintNotes(QPainter& painter, const std::vector<Column>&
             painter.setPen(palette::kBackground);
             painter.drawText(rect, Qt::AlignCenter, QStringLiteral("%1").arg(layers[{note.lane, y}]));
         }
+    }
+}
+
+void ChartEditorWidget::paintAssignPreview(QPainter& painter) {
+    const auto& project = controller_.project();
+    const auto column = columnAt(drag_.current.x());
+    const bool droppable = column && (column->kind == Column::Kind::Lane || column->kind == Column::Kind::BgmColumn);
+    QColor color = palette::assetColor(project.placement(project.cutPoint(drag_.cut).placementId).assetId).lighter(150);
+    color.setAlpha(droppable ? 170 : 70);
+    const auto& selected = controller_.selectedCuts();
+    const bool inSelection = std::find(selected.begin(), selected.end(), drag_.cut) != selected.end();
+    for (const auto cut : inSelection ? selected : std::vector{drag_.cut}) {
+        const double y = yOf(static_cast<double>(project.absolutePulseOf(project.cutPoint(cut))));
+        const QRectF rect = droppable ? QRectF(column->left + 1, y - kNoteHeight, column->width - 2, kNoteHeight)
+                                      : QRectF(drag_.current.x() - 10, y - kNoteHeight, 20, kNoteHeight);
+        painter.fillRect(rect, color);
+        painter.setPen(QPen(palette::kSelection, 1.0, Qt::DashLine));
+        painter.drawRect(rect);
     }
 }
 
@@ -556,23 +678,36 @@ void ChartEditorWidget::mousePressEvent(QMouseEvent* event) {
     if (controller_.selectedBgaEvent()) {
         controller_.selectBgaEvent(std::nullopt);
     }
-    bool onHandle = false;
-    if (const auto note = noteAt(point, &onHandle)) {
+    if (const auto note = noteAt(point)) {
         const auto& project = controller_.project();
         const auto cut = project.note(*note).cutPointId;
-        auto notes = additive ? controller_.selectedNotes() : std::vector<core::NoteId>{};
+        const auto& current = controller_.selectedNotes();
+        // Why not クリックで選び直す: 範囲選択した複数のノーツをまとめて横へ動かせるよう、選択中の 1 つを押したときは選択を保つ
+        const bool keepSelection =
+            !additive && current.size() > 1 && std::find(current.begin(), current.end(), *note) != current.end();
+        auto notes = additive || keepSelection ? current : std::vector<core::NoteId>{};
         if (std::find(notes.begin(), notes.end(), *note) == notes.end()) {
             notes.push_back(*note);
         }
         controller_.setSelectedNotes(notes);
         controller_.focusCuts({cut});
+        if (!additive) {
+            auditionCut(cut);
+        }
         drag_.note = *note;
-        drag_.kind = onHandle || event->modifiers().testFlag(Qt::ShiftModifier) ? DragKind::NoteLength : DragKind::NoteLane;
+        drag_.kind = event->modifiers().testFlag(Qt::ShiftModifier) ? DragKind::NoteLength : DragKind::NoteLane;
+        if (drag_.kind == DragKind::NoteLane && keepSelection) {
+            drag_.group = notes;
+        }
         drag_.pulse = project.absolutePulseOf(project.cutPoint(cut)) + project.note(*note).lengthPulses;
         return;
     }
     if (const auto cut = cutMarkAt(point)) {
-        auto cuts = additive ? controller_.selectedCuts() : std::vector<core::CutPointId>{};
+        const auto& current = controller_.selectedCuts();
+        // Why not クリックで選び直す: 範囲選択した複数の切断点をまとめてレーンへドラッグできるよう、選択中の 1 つを押したときは選択を保つ
+        const bool keepSelection = !additive && mode_ == ChartEditMode::Assign && current.size() > 1 &&
+                                   std::find(current.begin(), current.end(), *cut) != current.end();
+        auto cuts = additive || keepSelection ? current : std::vector<core::CutPointId>{};
         const auto found = std::find(cuts.begin(), cuts.end(), *cut);
         if (found == cuts.end()) {
             cuts.push_back(*cut);
@@ -588,6 +723,9 @@ void ChartEditorWidget::mousePressEvent(QMouseEvent* event) {
             drag_.kind = DragKind::CutMove;
             drag_.cut = *cut;
             drag_.pulse = controller_.project().absolutePulseOf(controller_.project().cutPoint(*cut));
+        } else if (mode_ == ChartEditMode::Assign && !additive) {
+            drag_.kind = DragKind::CutAssign;
+            drag_.cut = *cut;
         }
         return;
     }
@@ -613,10 +751,16 @@ void ChartEditorWidget::mouseReleaseEvent(QMouseEvent* event) {
     try {
         switch (finished.kind) {
             case DragKind::NoteLane:
-                if (finished.moved) {
+                if (finished.moved && !finished.group.empty()) {
+                    app::remapLanes(controller_.document(), "レーンの変更", groupLaneTargets(finished));
+                } else if (finished.moved) {
                     const auto column = columnAt(finished.current.x());
                     if (column && (column->kind == Column::Kind::Lane || column->kind == Column::Kind::BgmColumn)) {
                         app::changeNoteLane(controller_.document(), finished.note, column->x);
+                    } else {
+                        // Why not 元のレーンに戻す: ノーツはスライスの割り当てなので、レーンの外へ出したら割り当てを外し、
+                        // スライスは素材列の切断点（BGM）に戻るのが自然なため
+                        app::removeNotes(controller_.document(), {finished.note});
                     }
                 }
                 break;
@@ -630,6 +774,18 @@ void ChartEditorWidget::mouseReleaseEvent(QMouseEvent* event) {
             case DragKind::CutMove:
                 if (finished.moved) {
                     app::moveCut(controller_.document(), finished.cut, finished.pulse);
+                }
+                break;
+            case DragKind::CutAssign:
+                if (finished.moved) {
+                    const auto column = columnAt(finished.current.x());
+                    if (column && (column->kind == Column::Kind::Lane || column->kind == Column::Kind::BgmColumn)) {
+                        const auto& selected = controller_.selectedCuts();
+                        const bool inSelection = std::find(selected.begin(), selected.end(), finished.cut) != selected.end();
+                        const auto notes =
+                            app::assignLanes(controller_.document(), inSelection ? selected : std::vector{finished.cut}, column->x);
+                        controller_.setSelectedNotes(notes);
+                    }
                 }
                 break;
             case DragKind::BgaMove:
@@ -697,6 +853,18 @@ void ChartEditorWidget::mouseDoubleClickEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton) {
         return;
     }
+    if (event->modifiers().testFlag(Qt::ShiftModifier)) {
+        if (const auto note = noteAt(event->position())) {
+            const int resolution = std::max(1, controller_.project().timing.resolution);
+            const int divisions = controller_.snapDivisions() > 0 ? controller_.snapDivisions() : 16;
+            try {
+                app::toggleLongNote(controller_.document(), *note, resolution, std::max(1, resolution * 4 / divisions));
+            } catch (const std::exception& error) {
+                reportError(error);
+            }
+            return;
+        }
+    }
     if (const auto bga = columnAt(event->position().x()); bga && bga->kind == Column::Kind::Bga) {
         const auto image = controller_.selectedBgaImage();
         if (!image) {
@@ -748,7 +916,7 @@ void ChartEditorWidget::wheelEvent(QWheelEvent* event) {
         viewport_.zoomAround(height() - event->position().y(), std::pow(kWheelZoomStep, angle.y() / 120.0));
     } else if (event->modifiers().testFlag(Qt::ShiftModifier) || angle.x() != 0) {
         const int delta = angle.x() != 0 ? angle.x() : angle.y();
-        horizontalOffset_ = std::max(0.0, horizontalOffset_ - delta / 2.0);
+        setHorizontalOffset(horizontalOffset_ - delta / 2.0);
     } else {
         viewport_.scrollByPixels(angle.y() / 2.0);
     }

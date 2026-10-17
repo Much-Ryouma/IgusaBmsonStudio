@@ -73,6 +73,8 @@ public:
     bool open(const std::filesystem::path& path, QString* error);
     app::SaveOutcome save(const std::filesystem::path& path);
     app::ImportOutcome importAudio(const std::filesystem::path& file, app::OutsideFilePolicy policy);
+    app::BgaImportOutcome importBga(const std::filesystem::path& file, app::OutsideFilePolicy policy);
+    [[nodiscard]] std::vector<std::string> unreachableBgaFiles() const;
     void updateSongInfo(const core::SongInfo& info, double initialBpm);
 
     [[nodiscard]] std::optional<core::PlacementId> selectedPlacement() const noexcept { return selectedPlacement_; }

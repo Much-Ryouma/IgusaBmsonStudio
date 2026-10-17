@@ -119,5 +119,19 @@ TEST(ChartCommands, CMD007_UnchangedTimingAddsNoUndoStepAndSongEndCoversContent)
     EXPECT_EQ(songEndPulse(fixture.document.project()), 960 + 4 * 960);
 }
 
+TEST(ChartCommands, CMD008_TogglesBetweenLongAndNormalNote) {
+    Fixture fixture;
+    const auto note = assignLanes(fixture.document, {fixture.cuts[1]}, 3).front();
+    const auto blocker = assignLanes(fixture.document, {fixture.cuts[2]}, 4).front();
+
+    EXPECT_EQ(toggleLongNote(fixture.document, note, 240, 60), 240);
+    EXPECT_EQ(fixture.document.project().note(note).lengthPulses, 240);
+    EXPECT_EQ(fixture.document.undoLabel(), "ロングノーツの切り替え");
+    EXPECT_EQ(toggleLongNote(fixture.document, note, 240, 60), 0);
+    EXPECT_EQ(fixture.document.project().note(note).lengthPulses, 0);
+    changeNoteLane(fixture.document, blocker, 3);
+    EXPECT_THROW(toggleLongNote(fixture.document, note, 240, 240), std::invalid_argument);
+}
+
 }  // namespace
 }  // namespace ibs::app

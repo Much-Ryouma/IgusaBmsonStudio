@@ -23,6 +23,7 @@
 #include <QMenu>
 #include <QMenuBar>
 #include <QMessageBox>
+#include <QScrollBar>
 #include <QSplitter>
 #include <QStatusBar>
 #include <QToolBar>
@@ -35,6 +36,7 @@
 #include "StudioSettingsDialog.hpp"
 #include "TimelineScrollBar.hpp"
 #include "ChartEditorWidget.hpp"
+#include "ChartMinimap.hpp"
 #include "QtText.hpp"
 #include "StudioSettings.hpp"
 #include "SlicerPanel.hpp"
@@ -95,11 +97,44 @@ MainWindow::MainWindow(StudioController& controller, QWidget* parent) : QMainWin
     auto* chartPage = new QWidget(tabs_);
     auto* chartLayout = new QHBoxLayout(chartPage);
     chartLayout->setContentsMargins(0, 0, 0, 0);
-    chartEditor_ = new ChartEditorWidget(controller_, chartPage);
+    auto* chartColumn = new QWidget(chartPage);
+    auto* chartColumnLayout = new QVBoxLayout(chartColumn);
+    chartColumnLayout->setContentsMargins(0, 0, 0, 0);
+    chartColumnLayout->setSpacing(0);
+    chartEditor_ = new ChartEditorWidget(controller_, chartColumn);
+    chartScroll_ = new QScrollBar(Qt::Horizontal, chartColumn);
+    chartScroll_->setObjectName(QStringLiteral("chartHorizontalScroll"));
+    chartScroll_->hide();
+    chartColumnLayout->addWidget(chartEditor_, 1);
+    chartColumnLayout->addWidget(chartScroll_);
+    chartMinimap_ = new ChartMinimap(controller_, *chartEditor_, chartPage);
     bgaPanel_ = new BgaPanel(controller_, chartPage);
     bgaPanel_->setFixedWidth(240);
-    chartLayout->addWidget(chartEditor_, 1);
+    bgaPanel_->setSaveRequest([this] { return saveChartAs(); });
+    chartLayout->setSpacing(0);
+    chartLayout->addWidget(chartColumn, 1);
+    chartLayout->addWidget(chartMinimap_);
     chartLayout->addWidget(bgaPanel_);
+    connect(chartScroll_, &QScrollBar::valueChanged, chartEditor_,
+            [this](int value) { chartEditor_->setHorizontalOffset(static_cast<double>(value)); });
+    // Why not 列の数が変わったときだけ合わせる: 窓の大きさ・BGM 列の折りたたみ・ホイールでも見える幅が変わるため、描くたびに合わせる
+    chartEditor_->setViewObserver([this] {
+        // Why not 毎回スクロールバーを設定し直す: 値が同じでもスクロールバーと周りの再描画が起き、譜面を描くたびに連鎖するため、変わったときだけ触る
+        const int overflow = std::max(0, static_cast<int>(std::ceil(chartEditor_->columnsWidth() - chartEditor_->visibleColumnsWidth())));
+        const int page = static_cast<int>(chartEditor_->visibleColumnsWidth());
+        const int value = static_cast<int>(chartEditor_->horizontalOffset());
+        if (chartScroll_->maximum() != overflow || chartScroll_->pageStep() != page || chartScroll_->value() != value) {
+            const QSignalBlocker blocker(chartScroll_);
+            chartScroll_->setRange(0, overflow);
+            chartScroll_->setPageStep(page);
+            chartScroll_->setSingleStep(20);
+            chartScroll_->setValue(value);
+        }
+        if (chartScroll_->isHidden() == (overflow > 0)) {
+            chartScroll_->setVisible(overflow > 0);
+        }
+        chartMinimap_->refreshView();
+    });
     auto* arrangerPage = new QWidget(tabs_);
     auto* arrangerLayout = new QVBoxLayout(arrangerPage);
     arrangerLayout->setContentsMargins(0, 0, 0, 0);
@@ -252,7 +287,8 @@ void MainWindow::buildMenus() {
                                                 "譜面（割当モード）\n"
                                                 "  右の素材列の切断点をクリック: 選択して試聴、↑/↓: 次/前の切断点\n"
                                                 "  1〜7: 鍵盤に割当、S: スクラッチ、0: 割当を外す（BGM に戻す）\n"
-                                                "  ノーツを横にドラッグ: レーン変更、上端か Shift+ドラッグ: ロングノーツ\n"
+                                                "  ノーツを横にドラッグ: レーン変更（複数選択中はまとめて）、外へ出す: 割当を外す\n"
+                                                "  Shift+ドラッグ: ロングノーツの長さ、Shift+ダブルクリック: ロングノーツ ⇔ 通常\n"
                                                 "  空いた所をドラッグ: 範囲選択、クリック: カーソル、Ctrl+C / Ctrl+V: 割当パターン\n"
                                                 "  右クリック: BPM・STOP・拍子・小節線、Tab: 切断点モード（ダブルクリックで追加、ドラッグで移動）\n"
                                                 "  BGA / LYR / POOR 列: 右の一覧で画像を選び、ダブルクリックで置く。ドラッグで移動、Delete で削除\n\n"
@@ -340,9 +376,28 @@ bool MainWindow::openChart(const std::filesystem::path& path) {
     }
     storeRecentFiles(app::withRecentFile(loadRecentFiles(), path));
     arranger_->zoomToFit();
+    warnUnreachableBga();
     refreshTitle();
     refreshUndoActions();
     return true;
+}
+
+// Why not 保存のときの検証（V04）だけに任せる: 動画を別のフォルダに置いたまま作業を続けると、提出の直前まで
+// BGA が抜けていることに気づかないため、開いた時点で知らせる
+std::vector<std::string> MainWindow::warnUnreachableBga() {
+    const auto unreachable = controller_.unreachableBgaFiles();
+    if (unreachable.empty()) {
+        return unreachable;
+    }
+    QStringList names;
+    for (const auto& name : unreachable) {
+        names << toQString(name);
+    }
+    QMessageBox::warning(this, QStringLiteral("BGA のファイルが見つかりません"),
+                         QStringLiteral("次の BGA（画像・動画）は、譜面（bmson）と同じフォルダの中にありません。\n"
+                                        "プレーヤーで表示されないので、譜面のフォルダへ移すか、BGA 一覧から追加し直してください。\n\n%1")
+                             .arg(names.join(QLatin1Char('\n'))));
+    return unreachable;
 }
 
 void MainWindow::openChartDialog() {

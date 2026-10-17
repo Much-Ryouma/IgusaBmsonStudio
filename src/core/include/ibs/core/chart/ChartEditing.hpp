@@ -16,6 +16,7 @@ NoteId assignLane(Project& project, CutPointId cutPointId, int lane);
 std::size_t clearAssignment(Project& project, CutPointId cutPointId);
 
 [[nodiscard]] std::vector<CutPointId> cutPointsInSongOrder(const Project& project);
+[[nodiscard]] Pulse longNoteLengthFor(const Project& project, NoteId note, Pulse lastSliceLength, Pulse clearance);
 
 struct NotePattern {
     struct Entry {

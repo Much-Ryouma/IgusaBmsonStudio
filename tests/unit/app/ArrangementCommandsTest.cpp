@@ -103,5 +103,41 @@ TEST(ArrangementCommands, ARR006_SnapsSelectedCutsToTheGridInOneStep) {
     EXPECT_EQ(fixture.document.project().cutPoint(nearBeat).offsetPulses, 245);
 }
 
+TEST(ArrangementCommands, ARR007_RemovingAnAssetIsOneUndoStep) {
+    Fixture fixture;
+    const auto asset = fixture.document.project().placement(fixture.placement).assetId;
+    addManualCut(fixture.document, fixture.placement, 1200);
+
+    removeAsset(fixture.document, asset);
+
+    EXPECT_TRUE(fixture.document.project().assets().empty());
+    EXPECT_TRUE(fixture.document.project().cutPoints().empty());
+    EXPECT_EQ(fixture.document.undoLabel(), "素材の削除");
+    fixture.document.undo();
+    EXPECT_EQ(fixture.document.project().assets().size(), 1u);
+    EXPECT_EQ(fixture.document.project().cutPointsOf(fixture.placement).size(), 2u);
+}
+
+TEST(ArrangementCommands, ARR008_CopiesTheCutLayoutToSeveralAssetsAtOnce) {
+    Fixture fixture;
+    const auto source = fixture.document.project().placement(fixture.placement).assetId;
+    const auto [lead, pad] = fixture.document.apply("素材", [](core::Project& project) {
+        const auto first = project.addAsset("lead.wav");
+        const auto second = project.addAsset("pad.wav");
+        project.addPlacement(first, 960, 1);
+        project.addPlacement(second, 960, 2);
+        return std::pair{first, second};
+    });
+    addManualCut(fixture.document, fixture.placement, 1200);
+
+    const auto copied = copyCutLayout(fixture.document, source, {lead, pad});
+
+    EXPECT_EQ(copied.copiedCuts, 2u);
+    EXPECT_EQ(fixture.document.project().cutPoints().size(), 6u);
+    EXPECT_EQ(fixture.document.undoLabel(), "切断点のコピー");
+    fixture.document.undo();
+    EXPECT_EQ(fixture.document.project().cutPoints().size(), 4u);
+}
+
 }  // namespace
 }  // namespace ibs::app

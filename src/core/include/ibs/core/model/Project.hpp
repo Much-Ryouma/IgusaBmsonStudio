@@ -59,6 +59,7 @@ public:
     void setCutOrigin(CutPointId cutPointId, CutOrigin origin);
     void movePlacement(PlacementId placementId, Pulse newStartPulse);
     void removePlacement(PlacementId placementId);
+    void removeAsset(AssetId assetId);
     void removeNote(NoteId noteId);
     void setNoteLength(NoteId noteId, Pulse lengthPulses);
     void remapNoteLanes(const std::map<NoteId, int>& lanes);

@@ -2,6 +2,8 @@
 
 #include <filesystem>
 #include <map>
+#include <string>
+#include <vector>
 
 #include <QMainWindow>
 
@@ -11,6 +13,7 @@ class QAction;
 class QComboBox;
 class QLabel;
 class QMenu;
+class QScrollBar;
 class QTabWidget;
 
 namespace ibs::gui {
@@ -18,6 +21,7 @@ namespace ibs::gui {
 class ArrangerWidget;
 class BgaPanel;
 class ChartEditorWidget;
+class ChartMinimap;
 class SlicerPanel;
 class WaveformSlicerWidget;
 
@@ -30,6 +34,8 @@ public:
     [[nodiscard]] ArrangerWidget* arranger() const noexcept { return arranger_; }
     [[nodiscard]] WaveformSlicerWidget* slicer() const noexcept { return slicer_; }
     [[nodiscard]] ChartEditorWidget* chartEditor() const noexcept { return chartEditor_; }
+    [[nodiscard]] ChartMinimap* chartMinimap() const noexcept { return chartMinimap_; }
+    [[nodiscard]] QScrollBar* chartHorizontalScroll() const noexcept { return chartScroll_; }
     [[nodiscard]] QTabWidget* tabs() const noexcept { return tabs_; }
     [[nodiscard]] BgaPanel* bgaPanel() const noexcept { return bgaPanel_; }
     void handleTempoDesync(const app::TimingEditOutcome& outcome);
@@ -39,6 +45,7 @@ public:
     [[nodiscard]] QMenu* recentMenu() const noexcept { return recentMenu_; }
 
     bool openChart(const std::filesystem::path& path);
+    std::vector<std::string> warnUnreachableBga();
 
 protected:
     void closeEvent(QCloseEvent* event) override;
@@ -67,6 +74,8 @@ private:
     ArrangerWidget* arranger_ = nullptr;
     WaveformSlicerWidget* slicer_ = nullptr;
     ChartEditorWidget* chartEditor_ = nullptr;
+    ChartMinimap* chartMinimap_ = nullptr;
+    QScrollBar* chartScroll_ = nullptr;
     QTabWidget* tabs_ = nullptr;
     BgaPanel* bgaPanel_ = nullptr;
     QLabel* chartStats_ = nullptr;

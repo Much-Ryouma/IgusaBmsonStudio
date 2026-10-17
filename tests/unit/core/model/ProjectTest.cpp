@@ -230,5 +230,29 @@ TEST(Project, PRJ020_TempoAffectedMarkFollowsThePlacement) {
     EXPECT_THROW(project.markTempoAffected(placement), std::invalid_argument);
 }
 
+TEST(Project, PRJ021_RemovingAnAssetRemovesItsPlacementsCutsAndNotes) {
+    Project project;
+    const auto bass = project.addAsset("bass.wav");
+    const auto lead = project.addAsset("lead.wav");
+    const auto first = project.addPlacement(bass, 0, 0);
+    project.addPlacement(bass, 1920, 0);
+    const auto kept = project.addPlacement(lead, 0, 1);
+    project.addNote(project.addCutPoint(first, 240, CutOrigin::Auto), 1, 0);
+    project.addNote(project.addCutPoint(kept, 240, CutOrigin::Auto), 2, 0);
+    project.markTempoAffected(first);
+
+    project.removeAsset(bass);
+
+    ASSERT_EQ(project.assets().size(), 1u);
+    EXPECT_EQ(project.assets().front().name, "lead.wav");
+    ASSERT_EQ(project.placements().size(), 1u);
+    EXPECT_EQ(project.placements().front().id, kept);
+    EXPECT_EQ(project.cutPoints().size(), 2u);
+    ASSERT_EQ(project.notes().size(), 1u);
+    EXPECT_EQ(project.notes().front().lane, 2);
+    EXPECT_TRUE(project.tempoAffectedPlacements().empty());
+    EXPECT_THROW(project.removeAsset(bass), std::invalid_argument);
+}
+
 }  // namespace
 }  // namespace ibs::core

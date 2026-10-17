@@ -44,6 +44,23 @@ void removePlacement(EditorDocument& document, core::PlacementId placementId) {
     document.apply("配置の削除", [&](core::Project& project) { project.removePlacement(placementId); });
 }
 
+void removeAsset(EditorDocument& document, core::AssetId assetId) {
+    document.apply("素材の削除", [&](core::Project& project) { project.removeAsset(assetId); });
+}
+
+core::CutLayoutCopy copyCutLayout(EditorDocument& document, core::AssetId source, const std::vector<core::AssetId>& targets) {
+    return document.apply("切断点のコピー", [&](core::Project& project) {
+        core::CutLayoutCopy total;
+        for (const auto target : targets) {
+            const auto copied = core::copyCutLayout(project, source, target);
+            total.placements += copied.placements;
+            total.copiedCuts += copied.copiedCuts;
+            total.removedNotes += copied.removedNotes;
+        }
+        return total;
+    });
+}
+
 core::CutPointId addManualCut(EditorDocument& document, core::PlacementId placementId, core::Pulse songPulse) {
     const core::Pulse offset = songPulse - document.project().placement(placementId).startPulse;
     return document.apply("切断点の追加", [&](core::Project& project) {

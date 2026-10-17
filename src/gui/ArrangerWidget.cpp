@@ -8,11 +8,13 @@
 #include <QInputDialog>
 #include <QKeyEvent>
 #include <QMenu>
+#include <QMessageBox>
 #include <QMouseEvent>
 #include <QPainter>
 #include <QPainterPath>
 #include <QWheelEvent>
 
+#include "CutLayoutCopyDialog.hpp"
 #include "QtText.hpp"
 #include "StudioPalette.hpp"
 #include "TimelineMath.hpp"
@@ -406,6 +408,12 @@ void ArrangerWidget::keyPressEvent(QKeyEvent* event) {
 }
 
 void ArrangerWidget::contextMenuEvent(QContextMenuEvent* event) {
+    if (event->pos().x() < kHeaderWidth && event->pos().y() >= kRulerHeight) {
+        if (const auto row = rowAt(event->pos().y())) {
+            showAssetMenu(controller_.project().assets()[*row].id, event->globalPos());
+        }
+        return;
+    }
     const auto placement = placementAt(event->pos());
     if (!placement) {
         return;
@@ -458,6 +466,49 @@ void ArrangerWidget::contextMenuEvent(QContextMenuEvent* event) {
         });
     }
     menu.exec(event->globalPos());
+}
+
+void ArrangerWidget::showAssetMenu(core::AssetId asset, QPoint globalPosition) {
+    QMenu menu(this);
+    menu.addAction(QStringLiteral("音源定義を削除する"), this, [this, asset] { removeAssetWithConfirmation(asset); });
+    menu.addAction(QStringLiteral("音源配置をコピーする…"), this, [this, asset] { copyCutLayoutFrom(asset); });
+    menu.exec(globalPosition);
+}
+
+void ArrangerWidget::removeAssetWithConfirmation(core::AssetId asset) {
+    const auto answer = QMessageBox::question(
+        this, QStringLiteral("音源定義を削除する"),
+        QStringLiteral("「%1」の音源参照をbmsonファイルから削除しますか？ノーツの設定は無くなります(音源は消えません)")
+            .arg(toQString(controller_.project().asset(asset).name)));
+    if (answer != QMessageBox::Yes) {
+        return;
+    }
+    try {
+        app::removeAsset(controller_.document(), asset);
+    } catch (const std::exception& error) {
+        reportError(error);
+    }
+}
+
+void ArrangerWidget::copyCutLayoutFrom(core::AssetId source) {
+    CutLayoutCopyDialog dialog(controller_.project(), source, this);
+    if (dialog.exec() != QDialog::Accepted || dialog.chosenTargets().empty()) {
+        return;
+    }
+    const auto answer = QMessageBox::question(this, QStringLiteral("音源配置をコピーする"),
+                                              QStringLiteral("既存のノーツの設定は上書きされますがよろしいですか？"));
+    if (answer != QMessageBox::Yes) {
+        return;
+    }
+    try {
+        const auto copied = app::copyCutLayout(controller_.document(), source, dialog.chosenTargets());
+        emit controller_.statusMessage(QStringLiteral("%1 個の素材に切断点 %2 個をコピーしました（外した割り当て %3）")
+                                           .arg(dialog.chosenTargets().size())
+                                           .arg(copied.copiedCuts)
+                                           .arg(copied.removedNotes));
+    } catch (const std::exception& error) {
+        reportError(error);
+    }
 }
 
 }  // namespace ibs::gui

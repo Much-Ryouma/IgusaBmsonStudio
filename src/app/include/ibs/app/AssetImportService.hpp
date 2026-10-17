@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstdint>
 #include <filesystem>
 #include <optional>
 #include <string>
@@ -32,6 +33,16 @@ struct ImportOutcome {
     std::string error;
 };
 
+struct BgaImportOutcome {
+    std::optional<std::uint32_t> imageId;
+    std::string name;
+    bool copied = false;
+    bool alreadyImported = false;
+    std::string error;
+};
+
+[[nodiscard]] bool isBgaFile(const std::filesystem::path& file);
+
 [[nodiscard]] std::optional<std::string> assetNameInside(const std::filesystem::path& chartDirectory,
                                                          const std::filesystem::path& file);
 
@@ -40,8 +51,18 @@ public:
     explicit AssetImportService(AssetFileStore& files);
 
     ImportOutcome import(EditorDocument& document, const std::filesystem::path& file, OutsideFilePolicy policy);
+    BgaImportOutcome importBga(EditorDocument& document, const std::filesystem::path& file, OutsideFilePolicy policy);
 
 private:
+    struct Placed {
+        std::optional<std::string> name;
+        bool copied = false;
+        std::string error;
+    };
+
+    Placed placeInChartFolder(const EditorDocument& document, const std::filesystem::path& file, OutsideFilePolicy policy,
+                              const std::string& kind, bool alreadyRegistered(const core::Project&, const std::string&));
+
     AssetFileStore& files_;
 };
 

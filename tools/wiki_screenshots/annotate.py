@@ -24,7 +24,7 @@ CALLOUTS = {
     ],
     "main_chart": [
         "header", "measures", "timing", "lanes", "bgm_columns", "bga_columns",
-        "asset_columns", "density", "bga_panel", "statusbar",
+        "asset_columns", "density", "minimap", "bga_panel", "statusbar",
     ],
     "slicer_preview": [
         "param:検出方法", "param:感度", "param:最小間隔", "param:無音ゲート", "param:プリロール",
@@ -37,7 +37,7 @@ ANCHORS = {
     "arranger_header": "bottom", "ruler": "center", "placement": "center", "waveform": "inside_low",
     "slicer_panel": "before", "arranger_scroll": "center", "waveform_scroll": "center",
     "header": "header", "measures": "bottom", "timing": "bottom", "lanes": "bottom", "bgm_columns": "bottom",
-    "bga_columns": "bottom", "asset_columns": "bottom", "density": "bottom", "bga_panel": "center",
+    "bga_columns": "bottom", "asset_columns": "bottom", "density": "bottom", "minimap": "bottom", "bga_panel": "center",
 }
 
 COPIED = [

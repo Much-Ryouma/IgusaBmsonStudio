@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <stdexcept>
 
+#include "ibs/core/asset/AssetPath.hpp"
+
 namespace ibs::core {
 
 namespace {
@@ -89,6 +91,16 @@ void moveBgaEvent(Bga& bga, BgaTrack track, Pulse from, Pulse to) {
     }
     found->y = to;
     sortByY(events);
+}
+
+std::vector<std::string> unreachableBgaFiles(const Bga& bga, const FileSystemPort& chartFolder) {
+    std::vector<std::string> unreachable;
+    for (const auto& header : bga.headers) {
+        if (findUnsafePathReason(header.name) || !chartFolder.exists(normalizeSeparators(header.name))) {
+            unreachable.push_back(header.name);
+        }
+    }
+    return unreachable;
 }
 
 }  // namespace ibs::core
